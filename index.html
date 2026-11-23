@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#1b2a1f">
+<title>Realm Rising — Construa seu Reino</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+  <canvas id="game"></canvas>
+
+  <!-- Barra superior: recursos + tempo -->
+  <header id="top">
+    <div id="res-bar" aria-label="Recursos"></div>
+    <div id="clock">
+      <div id="date" data-tip="Data do reino"></div>
+      <div id="speed">
+        <button data-speed="0" title="Pausar (Espaço)">⏸</button>
+        <button data-speed="1" title="1x">1x</button>
+        <button data-speed="2" title="2x">2x</button>
+        <button data-speed="3" title="3x">3x</button>
+      </div>
+      <button id="btn-menu" title="Menu">☰</button>
+    </div>
+  </header>
+
+  <!-- Coluna esquerda: objetivos e alertas -->
+  <aside id="left">
+    <section id="goals" class="card"></section>
+    <section id="alerts" class="card"></section>
+  </aside>
+
+  <!-- Barra inferior -->
+  <nav id="tabs"></nav>
+
+  <!-- Painel (sheet) -->
+  <section id="sheet" class="hidden"></section>
+
+  <!-- Inspetor de entidade selecionada -->
+  <div id="inspector" class="card hidden"></div>
+
+  <!-- Modo construção -->
+  <div id="buildbar" class="card hidden"></div>
+
+  <div id="toasts"></div>
+  <div id="tip" class="hidden"></div>
+  <div id="modal-root"></div>
+  <div id="tut-root"></div>
+  <div id="boot">
+    <div class="boot-inner"><div class="boot-logo">🏰</div><h1>Realm Rising</h1><p>Preparando a floresta…</p></div>
+  </div>
+</div>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

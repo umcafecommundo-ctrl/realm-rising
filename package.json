@@ -1,0 +1,8 @@
+{
+  "name": "realm-rising",
+  "version": "1.0.0",
+  "description": "Jogo 2D de construção de reino idle (Canvas 2D, sem dependências)",
+  "type": "module",
+  "scripts": { "start": "node test/serve.mjs", "test": "node test/sim.test.mjs" },
+  "license": "MIT"
+}
