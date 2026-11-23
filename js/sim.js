@@ -623,38 +623,76 @@ export function startFestival(s) {
   return true;
 }
 
-/** Distribuição automática: livres (e quem já foi auto-atribuído) vão para onde há mais necessidade. */
+/** Distribuição automática: os moradores "livres" (e os já auto-atribuídos) são todos empregados.
+ *  1º cobre necessidades reais (comida, água, obras, vagas de prédios); 2º reparte o resto de forma preventiva,
+ *  dando mais gente ao recurso mais "magro" para evitar a próxima necessidade. Escolhas manuais não são mexidas. */
 export function autoAssign(s, maxChanges = 3) {
   if (!s.policies.autoJobs || !s._d) return 0;
   const adults = s.people.filter(p => p.age >= ADULT_AGE && !p.away);
+  const pool = adults.filter(p => p.job === 'livre' || p.auto);
+  if (!pool.length) return 0;
+  const manual = adults.filter(p => !(p.job === 'livre' || p.auto) && p.job !== 'soldado' && p.job !== 'sabio');
   const N = adults.filter(p => p.job !== 'soldado' && p.job !== 'sabio').length;
-  if (!N) return 0;
   const slots = s._d.slots, fd = foodDays(s), wd = waterDays(s), th = s._th || timeInfo(s);
   const sites = s.buildings.some(b => !b.done);
+  const winterSoon = th.season === 2 || th.season === 3;
+  const cnt = {}; for (const p of manual) cnt[p.job] = (cnt[p.job] || 0) + 1;
+  const ok = j => jobUnlocked(s, j);
+  // ---- 1) necessidades reais (mínimos) ----
   const T = {};
   if (sites) T.construtor = Math.max(1, Math.round(N * 0.2));
   if (slots.agricultor) T.agricultor = slots.agricultor;
   const crit = wd < 6 || fd < 5;
-  T.coletor = (wd < 6 || (fd < 5 && !slots.agricultor)) ? Math.max(1, Math.ceil(N * 0.25)) : Math.max(slots.coletor ? Math.min(slots.coletor, 2) : 0, N >= 4 ? 1 : 0);
-  if (th.season === 3 && fd < 12) T.cacador = Math.min(3, Math.ceil(N * 0.12)); else if (N >= 6) T.cacador = 1;
-  T.lenhador = (slots.lenhador || 0) + (s.res.wood < capOf(s, 'wood') * 0.5 ? Math.ceil(N * 0.25) : 1);
-  if (s.res.stone < capOf(s, 'stone') * 0.4) T.pedreiro = Math.ceil(N * 0.15);
-  if (slots.pedreiro && s.era >= 3) T.pedreiro = Math.max(T.pedreiro || 0, slots.pedreiro);
-  if (slots.ferreiro && jobUnlocked(s, 'ferreiro')) T.ferreiro = slots.ferreiro;
-  if (slots.comerciante && jobUnlocked(s, 'comerciante')) T.comerciante = slots.comerciante;
-  if (crit) { T.pedreiro = 0; T.lenhador = Math.min(T.lenhador, slots.lenhador || 0); if (sites) T.construtor = 1; }
-  const cnt = {}; for (const p of adults) cnt[p.job] = (cnt[p.job] || 0) + 1;
-  let changes = 0;
-  // libera auto-atribuídos de funções em excesso
-  for (const p of adults) if (p.auto && p.job !== 'livre' && (cnt[p.job] || 0) > (T[p.job] || 0) && changes < maxChanges) { cnt[p.job]--; setJob(s, p, 'livre', true); cnt.livre = (cnt.livre || 0) + 1; changes++; }
-  // preenche déficits
-  const order = Object.keys(T).filter(j => jobUnlocked(s, j)).sort((a, b) => ((cnt[a] || 0) - T[a]) - ((cnt[b] || 0) - T[b]));
-  for (const j of order) {
-    while ((cnt[j] || 0) < T[j] && changes < maxChanges) {
-      const pool = adults.filter(p => p.job === 'livre').sort((a, b) => (b.skill[j] || 0) - (a.skill[j] || 0));
-      if (!pool.length) break;
-      setJob(s, pool[0], j, true); cnt[j] = (cnt[j] || 0) + 1; cnt.livre--; changes++;
+  if (wd < 6 || (fd < 5 && !slots.agricultor)) T.coletor = Math.max(1, Math.ceil(N * 0.25));
+  else if (N >= 4) T.coletor = 1;
+  if (th.season === 3 && fd < 12) T.cacador = Math.min(3, Math.ceil(N * 0.12));
+  if (slots.lenhador) T.lenhador = slots.lenhador;
+  if (slots.pedreiro && s.era >= 3) T.pedreiro = slots.pedreiro;
+  if (slots.ferreiro) T.ferreiro = slots.ferreiro;
+  if (slots.comerciante) T.comerciante = slots.comerciante;
+  if (crit) { delete T.pedreiro; T.lenhador = Math.min(T.lenhador || 0, slots.lenhador || 0); if (sites) T.construtor = 1; }
+  const want = {}; let left = pool.length;
+  const give = (j, n) => { if (!ok(j) || n <= 0 || left <= 0) return; const k = Math.min(n, left); want[j] = (want[j] || 0) + k; left -= k; };
+  const prio = ['coletor', 'agricultor', 'construtor', 'cacador', 'lenhador', 'pedreiro', 'ferreiro', 'comerciante'];
+  for (const j of prio) if (T[j]) give(j, T[j] - (cnt[j] || 0));
+  // ---- 2) reparte o restante conforme o que está mais "magro" (prevenção) ----
+  const cap = r => Math.max(1, capOf(s, r));
+  const lack = r => Math.max(0, 1 - s.res[r] / (cap(r) * 0.85));
+  const need = {
+    coletor: Math.max(0.15, 1 - Math.min(wd, fd) / 14, lack('food') * 0.6, lack('water') * 0.6),
+    agricultor: slots.agricultor ? Math.max(0.2, 1 - fd / 14) : 0,
+    lenhador: Math.max(0.2, lack('wood') + (winterSoon ? 0.35 : 0), s.era >= 2 ? lack('planks') * 0.4 : 0),
+    pedreiro: Math.max(0.15, lack('stone')),
+    cacador: N >= 5 ? Math.max(0.05, (1 - fd / 14) * (th.season === 3 ? 1 : 0.4)) : 0,
+    construtor: sites ? 0.9 : (N >= 6 ? 0.12 : 0),
+  };
+  if (!sites && s.res.wood > cap('wood') * 0.7 && s.res.stone > cap('stone') * 0.5) need.construtor = 0.3; // sobra material: ter construtores prontos
+  if (s.era >= 3) { need.pedreiro = Math.max(need.pedreiro, lack('iron') * 0.5); }
+  // limite de vagas em ofícios de prédio: não passa disso
+  const capJob = j => (j === 'agricultor' ? (slots.agricultor || 0) + 0 : 99);
+  while (left > 0) {
+    let best = null, bs = -1;
+    for (const j of Object.keys(need)) {
+      if (!ok(j) || need[j] <= 0) continue;
+      const have = (cnt[j] || 0) + (want[j] || 0);
+      if (have >= capJob(j)) continue;
+      const score = need[j] / (have + 1);
+      if (score > bs) { bs = score; best = j; }
     }
+    if (!best) break;
+    give(best, 1);
+  }
+  // ---- 3) aplica a diferença com o mínimo de trocas ----
+  const quota = { ...want };
+  const stay = new Set(), move = [];
+  for (const p of pool) { if (quota[p.job] > 0) { quota[p.job]--; stay.add(p); } else move.push(p); }
+  let changes = 0;
+  for (const p of move) {
+    if (changes >= maxChanges) break;
+    const j = Object.keys(quota).sort((a, b) => (quota[b] || 0) - (quota[a] || 0)).find(k => quota[k] > 0);
+    if (!j) { if (p.job !== 'livre' || !p.auto) { setJob(s, p, 'livre', true); changes++; } continue; }
+    quota[j]--;
+    if (p.job !== j) { setJob(s, p, j, true); changes++; }
   }
   if (changes) s._dirty = true;
   return changes;
