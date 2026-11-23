@@ -87,6 +87,7 @@ function slowTick(s, dt, th, offline) {
     }
     s._flowT = 0;
   }
+  s._autoT = (s._autoT || 0) + dt; if (s._autoT >= (offline ? 10 : 6)) { s._autoT = 0; autoAssign(s, offline ? 6 : 2); }
   worldSlow(s, offline); marchTick(s, offline);
   s._toolFactor = s.res.tools > 0.5 ? 1.15 : (countB(s, 'smithy') ? 0.85 : 1);
   if (!offline) { checkQuests(s); checkAchievements(s); }
@@ -579,7 +580,7 @@ export function demolish(s, b) {
   bus.emit('demolished', b);
   return true;
 }
-export function setJob(s, p, job) { p.job = job; s._dirty = true; p.rt.task = null; }
+export function setJob(s, p, job, auto = false) { p.job = job; p.auto = auto; s._dirty = true; p.rt.task = null; }
 export function jobCounts(s) {
   const c = {};
   for (const p of s.people) if (p.age >= ADULT_AGE) c[p.job] = (c[p.job] || 0) + 1;
@@ -620,6 +621,43 @@ export function startFestival(s) {
   toast(s, 'Festival começou! 🎉', 'good', '🎉');
   bus.emit('festival');
   return true;
+}
+
+/** Distribuição automática: livres (e quem já foi auto-atribuído) vão para onde há mais necessidade. */
+export function autoAssign(s, maxChanges = 3) {
+  if (!s.policies.autoJobs || !s._d) return 0;
+  const adults = s.people.filter(p => p.age >= ADULT_AGE && !p.away);
+  const N = adults.filter(p => p.job !== 'soldado' && p.job !== 'sabio').length;
+  if (!N) return 0;
+  const slots = s._d.slots, fd = foodDays(s), wd = waterDays(s), th = s._th || timeInfo(s);
+  const sites = s.buildings.some(b => !b.done);
+  const T = {};
+  if (sites) T.construtor = Math.max(1, Math.round(N * 0.2));
+  if (slots.agricultor) T.agricultor = slots.agricultor;
+  const crit = wd < 6 || fd < 5;
+  T.coletor = (wd < 6 || (fd < 5 && !slots.agricultor)) ? Math.max(1, Math.ceil(N * 0.25)) : Math.max(slots.coletor ? Math.min(slots.coletor, 2) : 0, N >= 4 ? 1 : 0);
+  if (th.season === 3 && fd < 12) T.cacador = Math.min(3, Math.ceil(N * 0.12)); else if (N >= 6) T.cacador = 1;
+  T.lenhador = (slots.lenhador || 0) + (s.res.wood < capOf(s, 'wood') * 0.5 ? Math.ceil(N * 0.25) : 1);
+  if (s.res.stone < capOf(s, 'stone') * 0.4) T.pedreiro = Math.ceil(N * 0.15);
+  if (slots.pedreiro && s.era >= 3) T.pedreiro = Math.max(T.pedreiro || 0, slots.pedreiro);
+  if (slots.ferreiro && jobUnlocked(s, 'ferreiro')) T.ferreiro = slots.ferreiro;
+  if (slots.comerciante && jobUnlocked(s, 'comerciante')) T.comerciante = slots.comerciante;
+  if (crit) { T.pedreiro = 0; T.lenhador = Math.min(T.lenhador, slots.lenhador || 0); if (sites) T.construtor = 1; }
+  const cnt = {}; for (const p of adults) cnt[p.job] = (cnt[p.job] || 0) + 1;
+  let changes = 0;
+  // libera auto-atribuídos de funções em excesso
+  for (const p of adults) if (p.auto && p.job !== 'livre' && (cnt[p.job] || 0) > (T[p.job] || 0) && changes < maxChanges) { cnt[p.job]--; setJob(s, p, 'livre', true); cnt.livre = (cnt.livre || 0) + 1; changes++; }
+  // preenche déficits
+  const order = Object.keys(T).filter(j => jobUnlocked(s, j)).sort((a, b) => ((cnt[a] || 0) - T[a]) - ((cnt[b] || 0) - T[b]));
+  for (const j of order) {
+    while ((cnt[j] || 0) < T[j] && changes < maxChanges) {
+      const pool = adults.filter(p => p.job === 'livre').sort((a, b) => (b.skill[j] || 0) - (a.skill[j] || 0));
+      if (!pool.length) break;
+      setJob(s, pool[0], j, true); cnt[j] = (cnt[j] || 0) + 1; cnt.livre--; changes++;
+    }
+  }
+  if (changes) s._dirty = true;
+  return changes;
 }
 
 // ---------- Eras ----------

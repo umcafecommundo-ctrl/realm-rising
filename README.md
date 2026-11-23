@@ -15,12 +15,16 @@ node test/serve.mjs 8080      # servidor estático mínimo (qualquer servidor es
 
 Também funciona publicado como site estático (GitHub Pages, Netlify, etc.): é só servir a pasta.
 
+## Jogar online
+https://umcafecommundo-ctrl.github.io/realm-rising/ (publicado pelo workflow `.github/workflows/pages.yml`).
+
 ## Como jogar
 
 * **Câmera:** arraste para mover; roda do mouse / pinça para zoom. Toque num morador ou prédio para ver detalhes.
 * **Tutorial guiado** no primeiro jogo (setas, destaques, uma mecânica por vez); dicas contextuais aparecem quando algo novo é liberado.
 * **Objetivos** (curto/médio/longo prazo) e **alertas coloridos** (verde = ok, amarelo = atenção, vermelho = perigo) ficam sempre visíveis.
 * Atalhos: `Espaço` pausa · `1/2/3` velocidade · `B` construir · `P` povo · `J` trabalho · `T` pesquisa · `Esc` cancela.
+* **Distribuição automática** (aba Trabalho): moradores "Livres" vão sozinhos para onde há necessidade (comida, água, obras, madeira, vagas nos prédios); escolhas manuais são respeitadas.
 * Botão **?** em cada painel explica o que ele faz.
 
 ### O que existe

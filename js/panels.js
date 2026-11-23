@@ -86,7 +86,9 @@ export function jobsPanel(s, ui) {
   const c = jobCounts(s);
   const d = s._d;
   const free = c.livre || 0;
-  let h = `<div class="help" style="display:${ui.helpOn ? 'block' : 'none'}">Defina quantos moradores trabalham em cada profissão. Moradores <b>Livres</b> ajudam no que for mais necessário, com 70% de eficiência. Edifícios com vagas (serraria, fazenda...) usam trabalhadores da profissão correspondente primeiro.</div>
+  const au = s.policies.autoJobs;
+  let h = `<div class="row" style="flex-wrap:wrap"><span style="font-size:22px">🧭</span><div class="grow"><div class="nm">Distribuição automática</div><div class="sub">Quem está "Livre" vai sozinho para onde há mais necessidade. Escolhas manuais são respeitadas.</div></div><div class="seg" style="min-width:110px"><button class="${!au ? 'on' : ''}" data-act="pol:autoJobs:0">Off</button><button class="${au ? 'on' : ''}" data-act="pol:autoJobs:1">On</button></div></div>
+    <div class="help" style="display:${ui.helpOn ? 'block' : 'none'}">Defina quantos moradores trabalham em cada profissão. Moradores <b>Livres</b> ajudam no que for mais necessário, com 70% de eficiência. Edifícios com vagas (serraria, fazenda...) usam trabalhadores da profissão correspondente primeiro.</div>
     <div class="row"><span style="font-size:22px">${JOBS.livre.icon}</span><div class="grow"><div class="nm">Livres</div><div class="sub">${JOBS.livre.desc}</div></div><b style="font-size:18px">${free}</b></div>`;
   for (const j of JOB_ORDER) {
     if (j === 'livre' || !jobUnlocked(s, j)) continue;
