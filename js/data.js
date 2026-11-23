@@ -157,7 +157,9 @@ export const UNITS = {
 // ---------- Políticas ----------
 export const POLICIES = {
   autoJobs: { name: 'Distribuição automática', era: 1, bool: true, icon: '🧭', desc: 'Moradores sem função fixa são enviados sozinhos para onde há mais necessidade (comida, água, obras, madeira, vagas nos prédios). Quem você escolhe manualmente não é mexido.' },
-  autoBuild: { name: 'Construção automática (ausente)', era: 1, bool: true, icon: '🏗️', desc: 'Quando você está offline, o conselho ergue o que o reino precisa (moradia, depósitos, fazendas, poço...) usando só o excedente, e reorganiza obras suas fora do lugar em distritos.' },
+  autoBuild: { name: 'Construção automática', era: 1, bool: true, icon: '🏗️', desc: 'O conselho ergue o que o reino precisa (moradia, depósitos, fazendas, poço...) e o que falta para a próxima era, usando só o excedente. Quando você está offline também reorganiza obras suas em distritos.' },
+  autoResearch: { name: 'Pesquisa automática', era: 1, bool: true, icon: '🔬', desc: 'Escolhe sozinha a próxima tecnologia: primeiro as exigidas pela próxima era e pelos prédios que faltam, depois as mais úteis.' },
+  autoEra: { name: 'Evolução automática de era', era: 1, bool: true, icon: '⭐', desc: 'Quando todos os requisitos e o custo estiverem prontos, o reino evolui de era sozinho.' },
   tax:   { name: 'Impostos', era: 3, options: ['Baixos', 'Médios', 'Altos'], icon: '🪙',
     desc: ['+6 felicidade, pouco ouro.', 'Equilíbrio.', '+60% de ouro, −12 felicidade.'] },
   ration: { name: 'Racionamento', era: 1, bool: true, icon: '🍞', desc: 'Consumo de comida e água −30%, mas −8 de felicidade.' },

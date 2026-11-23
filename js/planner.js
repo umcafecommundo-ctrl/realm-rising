@@ -1,9 +1,9 @@
 // planner.js — urbanismo automático: onde construir (distritos organizados) e o que construir quando o jogador está ausente.
 // Regras de economia: só gasta o excedente (mantém reservas), no máximo 2 obras abertas, e nunca constrói com fome/sede crítica.
 
-import { BUILDINGS, SEASON_DAYS } from './data.js';
-import { CENTER, unlocked, countB } from './state.js';
-import { footprintOk, placeBuilding } from './sim.js';
+import { BUILDINGS, SEASON_DAYS, ERAS } from './data.js';
+import { CENTER, unlocked, countB, eraRadius } from './state.js';
+import { footprintOk, placeBuilding, eraStatus } from './sim.js';
 import { chron, foodDays, waterDays, avgJoy, capOf, adultsOf } from './core.js';
 
 // Distritos: ângulo central (graus, 0 = leste, 90 = sul), abertura, faixa de raio (em tiles) e tipos
@@ -40,12 +40,14 @@ function clearOf(s, ignore, x, y, w, h, m) {
 /** Procura o melhor lugar: grade alinhada ao centro, dentro do distrito, com 1 tile de folga entre prédios. */
 export function findSlot(s, type, ignore = null) {
   const d = BUILDINGS[type], z = zoneOf(type);
-  const rmax = Math.min(z ? z.rmax : 24, 40);
   const gx = type === 'port' ? 1 : Math.max(4, d.w + 1), gy = type === 'port' ? 1 : Math.max(3, d.h + 1);
   const saved = ignore ? s.buildings.splice(s.buildings.indexOf(ignore), 1) : null;
   let best = null;
   try {
-    for (let margin = 1; margin >= 0 && !best; margin--) {
+    const stages = [[1, 0, 0], [0, 40, 0], [0, 180, 1], [0, 180, 2]];  // [folga, abertura extra, expansão de raio]
+    for (const [margin, extra, grow] of stages) {
+      if (best) break;
+      const rmax = grow === 0 ? (z ? z.rmax : 24) : grow === 1 ? Math.max(z ? z.rmax : 24, eraRadius(s) - 2) : eraRadius(s) - 1;
       let bs = 1e9;
       for (let y = Math.floor(CENTER.y - rmax); y <= CENTER.y + rmax; y++) {
         if ((y - Math.floor(CENTER.y)) % gy !== 0) continue;
@@ -55,7 +57,7 @@ export function findSlot(s, type, ignore = null) {
           if (r < (z ? z.rmin : 4) - 0.5 || r > rmax + 0.5) continue;
           if (onAvenue(x, y, d.w, d.h) && !d.road) continue;
           const ad = z ? angDiff(a, z.ang) : 0;
-          if (z && ad > z.spread + (margin ? 0 : 40)) continue;
+          if (z && ad > z.spread + extra) continue;
           const sc = r * 0.25 + ad * 0.12 + Math.abs(r - ((z ? z.rmin : 4) + 2)) * 0.1;
           if (sc >= bs) continue;
           if (footprintOk(s, type, x, y)) continue;
@@ -69,12 +71,12 @@ export function findSlot(s, type, ignore = null) {
 }
 
 // ---------- Orçamento seguro ----------
-function reserves(s) {
+function reserves(s, k = 1) {
   const pop = s.people.length;
-  return { wood: Math.max(20, pop * 0.35 * SEASON_DAYS * 0.6), stone: 10, planks: 10, gold: 40, iron: 10, tools: 0, weapons: 0, cloth: 0, jewels: 0, food: 0, water: 0 };
+  return { wood: Math.max(15, pop * 0.35 * SEASON_DAYS * 0.6 * k), stone: 10 * k, planks: 10 * k, gold: 40 * k, iron: 10 * k, tools: 0, weapons: 0, cloth: 0, jewels: 0, food: 0, water: 0 };
 }
-function affordSafely(s, cost, frac = 0.7) {
-  const rs = reserves(s);
+function affordSafely(s, cost, frac = 0.7, k = 1) {
+  const rs = reserves(s, k);
   for (const r in cost) { const have = s.res[r]; if (have < cost[r]) return false; if (have - cost[r] < (rs[r] || 0)) return false; if (cost[r] > have * frac && cost[r] > 12) return false; }
   return true;
 }
@@ -96,43 +98,49 @@ function autoBuildOnce(s) {
   const era = s.era;
   const storageN = have('storehouse') + have('gatherpoint');
   const full = ['wood', 'stone', 'food', 'water'].some(r => s.res[r] >= capOf(s, r) * 0.92);
+  const st = eraStatus(s);
+  const saving = !!st && st.reqOk && !st.costOk;   // só falta juntar recursos: não gasta em extras
   const L = [];   // [tipo, condição, relaxado?]
   if (d.beds < pop - 1 && fd >= 2 && wd >= 1.5) L.push([era >= 2 ? 'house' : 'shelter', true, true]); // gente sem cama: moradia primeiro
   if (wd < 3 && era >= 2) L.push(['well', have('well') < 4, true]);
   if (fd < 4 && era >= 2) L.push(['farm', have('farm') < Math.ceil(pop / 8) + 1, true]);
-  const calm = fd >= 3 && wd >= 2;
-  L.push([era >= 2 ? 'house' : 'shelter', calm && d.beds < pop + 2 && pop < 400, true]);
-  L.push([era >= 2 ? 'storehouse' : 'gatherpoint', full && storageN < 1 + pop / 14, false]);
+  const foodCap = era >= 2 ? have('farm') * 16 + 8 : 12;   // população que a produção de comida sustenta (inclui o inverno)
+  const calm = fd >= 6 && wd >= 3 && rate('food') > -4;
+  L.push([era >= 2 ? 'house' : 'shelter', calm && d.beds < pop + 2 && pop + 2 <= foodCap * 1.15, true]);
+  // o que falta para evoluir de era
+  if (st) for (const [type, n] of Object.entries(ERAS[era + 1].req.buildings || {})) L.push([type, have(type) < n, 2]);
+  const winterCap = capOf(s, 'food') < pop * SEASON_DAYS * 1.1 && pop >= 8; // estoque de comida não cobre um inverno
+  L.push([era >= 2 ? 'storehouse' : 'gatherpoint', (winterCap && storageN < 10) || (!saving && full && storageN < 1 + pop / 14), winterCap]);
   if (era >= 2) {
-    L.push(['farm', have('farm') < Math.ceil(pop / 9) && (fd < 14 || rate('food') < 0), false]);
-    L.push(['well', have('well') < Math.max(1, Math.ceil(pop / 20)) && (wd < 14 || rate('water') < 0), false]);
-    L.push(['sawmill', pop >= 10 && !have('sawmill'), false]);
+    L.push(['farm', (have('farm') < Math.ceil(pop / 8) + (pop >= 16 ? 1 : 0) && (fd < 20 || rate('food') < 0)) || pop + 4 > foodCap, true]);
+    L.push(['well', have('well') < Math.max(1, Math.ceil(pop / 20)) && (wd < 14 || rate('water') < 0), true]);
+    L.push(['sawmill', !saving && pop >= 10 && !have('sawmill'), false]);
   }
   if (era >= 3) {
-    L.push(['market', pop >= 18 && !have('market'), false]);
-    L.push(['tavern', (pop >= 20 || avgJoy(s) < 55) && !have('tavern'), false]);
-    L.push(['smithy', pop >= 22 && !have('smithy'), false]);
-    L.push(['mine', pop >= 22 && s.flags.ore && !have('mine'), false]);
-    L.push(['loom', pop >= 25 && !have('loom'), false]);
-    L.push(['barracks', pop >= 25 && !have('barracks') && (s.threats.length > 0 || (s.world?.kingdoms || []).some(k => k.known && k.pers === 'agressivo')), false]);
+    L.push(['market', !saving && pop >= 18 && !have('market'), false]);
+    L.push(['tavern', !saving && (pop >= 20 || avgJoy(s) < 55) && !have('tavern'), false]);
+    L.push(['smithy', !saving && pop >= 22 && !have('smithy'), false]);
+    L.push(['mine', !saving && pop >= 22 && s.flags.ore && !have('mine'), false]);
+    L.push(['loom', !saving && pop >= 25 && !have('loom'), false]);
+    L.push(['barracks', !saving && pop >= 18 && !have('barracks'), false]);
   }
   if (era >= 4) {
-    L.push(['castle', pop >= 45 && !have('castle'), false]);
-    L.push(['cathedral', pop >= 50 && !have('cathedral'), false]);
-    L.push(['academy', pop >= 50 && !have('academy'), false]);
-    L.push(['jeweler', pop >= 55 && !have('jeweler'), false]);
-    L.push(['port', pop >= 50 && !have('port'), false]);
+    L.push(['castle', !saving && pop >= 45 && !have('castle'), false]);
+    L.push(['cathedral', !saving && pop >= 50 && !have('cathedral'), false]);
+    L.push(['academy', !saving && pop >= 50 && !have('academy'), false]);
+    L.push(['jeweler', !saving && pop >= 55 && !have('jeweler'), false]);
+    L.push(['port', !saving && pop >= 50 && !have('port'), false]);
   }
   for (const [type, cond, relaxed] of L) {
     if (!cond || !unlocked(s, type) || pending(type)) continue;
     const def = BUILDINGS[type];
     if (def.unique && have(type)) continue;
-    if (!affordSafely(s, def.cost, relaxed ? 0.9 : 0.7)) continue;
+    if (!affordSafely(s, def.cost, relaxed ? 0.95 : 0.7, relaxed === 2 ? 0.25 : 1)) continue;
     const slot = findSlot(s, type); if (!slot) continue;
     const b = placeBuilding(s, type, slot[0], slot[1]);
     if (b) {
       const z = zoneOf(type);
-      chron(s, `Sem o líder por perto, o conselho mandou erguer ${def.name}${z ? ` (${z.name})` : ''}.`, 'build');
+      chron(s, `O conselho mandou erguer ${def.name}${z ? ` (${z.name})` : ''}.`, 'build');
       (s._autoBuilt ||= []).push(def.name);
       return b;
     }

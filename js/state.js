@@ -98,7 +98,7 @@ export function newGame(seed = (Math.random() * 1e9) | 0) {
     res: { wood: 6, stone: 0, food: 18, water: 14, planks: 0, tools: 0, cloth: 0, iron: 0, gold: 0, weapons: 0, jewels: 0 },
     nodes, nextNid: nextId, nextPid: 1, nextBid: 1,
     people: [], buildings: [], roads: [],
-    policies: { autoJobs: true, autoBuild: true, tax: 1, ration: false, overtime: false, conscription: false, border: 0, stance: 0 },
+    policies: { autoJobs: true, autoBuild: true, autoResearch: true, autoEra: true, tax: 1, ration: false, overtime: false, conscription: false, border: 0, stance: 0 },
     festival: { until: 0, cooldownUntil: 0 },
     tech: { done: {}, current: null, rp: 0, progress: 0 },
     quests: { done: {}, claimed: {} }, achievements: {},

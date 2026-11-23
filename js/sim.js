@@ -8,7 +8,7 @@ import { updatePerson, updateAnimals, eatNow, autoJob } from './ai.js';
 import { autoBuild } from './planner.js';
 import { rollEvent, resolveAuto, makeInstance } from './events.js';
 import { worldDaily, worldSlow, initWorld } from './world.js';
-import { warDaily, resolveThreat, trainTick, marchTick } from './war.js';
+import { warDaily, resolveThreat, trainTick, marchTick, autoMilitary } from './war.js';
 import { checkQuests, checkAchievements } from './quests.js';
 import { clamp, rnd, rint, chance, pick, hash2, randName } from './util.js';
 
@@ -126,7 +126,7 @@ function needsStep(s, p, dt, th, offline) {
   // saúde
   let dh = 0, cause = null;
   const harsh = offline ? 0.35 : 1; // ausente, o povo emigra antes de morrer (ver dailyTick)
-  if (n.hunger <= 0) { dh -= 0.4 * harsh; cause = 'morreu de fome'; }
+  if (n.hunger <= 0) { dh -= 0.26 * (0.6 + hash2(p.id, 3) * 0.8) * harsh; cause = 'morreu de fome'; }
   if (s.res.water <= 0 && p.thirst) { dh -= 0.25 * harsh; cause = cause || 'morreu de sede'; }
   if (p.sick > 0) { dh -= 0.14; cause = cause || 'sucumbiu à doença'; }
   if (s._cold) { dh -= 0.1; cause = cause || 'morreu de frio'; }
@@ -207,7 +207,7 @@ function produce(s, dt, th, offline) {
         if (b.mode === 'tools') { const make = Math.min(n * 4 * sm * k, s.res.iron, s.res.wood / 2); if (make > 0) { addRes(s, 'iron', -make, { noStat: true }); addRes(s, 'wood', -make * 2, { noStat: true }); addRes(s, 'tools', make); } }
         else { const make = Math.min(n * 2 * sm * k, s.res.iron / 2, s.res.planks); if (make > 0) { addRes(s, 'iron', -make * 2, { noStat: true }); addRes(s, 'planks', -make, { noStat: true }); addRes(s, 'weapons', make); } }
         break; }
-      case 'loom': { const n = staffTot(b); if (n) { const make = Math.min(n * 6 * sm * k, s.res.food); if (make > 0) { addRes(s, 'food', -make, { noStat: true }); addRes(s, 'cloth', make); } } break; }
+      case 'loom': { const n = staffTot(b); if (n && s.res.food > s.people.length * SEASON_DAYS * 1.3) { const make = Math.min(n * 6 * sm * k, s.res.food); if (make > 0) { addRes(s, 'food', -make, { noStat: true }); addRes(s, 'cloth', make); } } break; }
       case 'market': addRes(s, 'gold', staffTot(b) * 5 * sm * k * (1 + techFx(s, 'trade'))); break;
       case 'tavern': { if (s.res.food >= 1 || staffTot(b) === 0) { addRes(s, 'food', -2 * k, { noStat: true }); b._open = true; } else b._open = false; addRes(s, 'gold', staffTot(b) * 3 * sm * k * (b._open ? 1 : 0)); break; }
       case 'port': addRes(s, 'food', (6 + staffN(b, 'coletor') * 10 * sm) * k); addRes(s, 'gold', staffN(b, 'comerciante') * 6 * sm * k * (1 + techFx(s, 'trade'))); break;
@@ -228,7 +228,27 @@ function produce(s, dt, th, offline) {
   if (s.res.tools > 0) addRes(s, 'tools', -adultsOf(s).length / 14 * k, { noStat: true });
 }
 
+/** Escolhe a próxima pesquisa: exigidas pela próxima era / prédios que faltam → depois a mais barata disponível. */
+export function pickTech(s) {
+  const next = ERAS[s.era + 1];
+  const targets = [];
+  if (next) {
+    for (const id of next.req.tech || []) targets.push(id);
+    for (const type of Object.keys(next.req.buildings || {})) { const tg = BUILDINGS[type].tech; if (tg) targets.push(tg); }
+  }
+  for (const id of ['agriculture', 'cartography', 'masonry', 'sanitation', 'commerce', 'metallurgy', 'military', 'writing']) targets.push(id);
+  const chain = id => { // primeira pesquisa disponível no caminho até id
+    if (!TECHS[id] || s.tech.done[id]) return null;
+    if (techAvailable(s, id)) return id;
+    for (const r of TECHS[id].req) { const c = chain(r); if (c) return c; }
+    return null;
+  };
+  for (const id of targets) { const c = chain(id); if (c) return c; }
+  const av = Object.keys(TECHS).filter(id => techAvailable(s, id)).sort((a, b) => TECHS[a].cost - TECHS[b].cost);
+  return av[0] || null;
+}
 function researchStep(s, dt) {
+  if (!s.tech.current && s.policies.autoResearch) { const id = pickTech(s); if (id) startResearch(s, id); }
   const rp = (s._rpGain || 0) * (1 + techFx(s, 'rp'));
   s._rpPerDay = rp / (dt / DAY_LEN || 1);
   if (s.tech.current) {
@@ -332,7 +352,7 @@ function regrowNodes(s, th) {
       else if (n.st === 'sapling' && s.t >= n.t) { n.st = 'alive'; n.amt = n.max; }
     } else if (n.type === 'bush') {
       if (th.season !== 3 && n.amt < n.max) n.amt = Math.min(n.max, n.amt + (th.season === 0 ? 0.7 : 1.2));
-    } else if (n.type === 'rock' && n.amt <= 0.01) { n.amt = 0; n._gone = true; }
+    } else if (n.type === 'rock' && n.amt < n.max) { n.amt = Math.min(n.max, Math.max(0, n.amt) + 0.8); }
   }
   s.nodes = s.nodes.filter(n => !n._gone && !(n.type === 'tree' && n.st === 'removed'));
 }
@@ -361,7 +381,7 @@ function dailyTick(s, th, offline) {
   const wells = countB(s, 'well');
   const pop = s.people.length;
   for (const p of s.people) {
-    p.age += 1 / AGE_DAYS_PER_YEAR;
+    p.age += p.age < ADULT_AGE ? 1 / AGE_DAYS_PER_YEAR : 1 / (AGE_DAYS_PER_YEAR * 3); // infância rápida, vida adulta longa
     if (p.sick > 0) { p.sick -= 1; if (p.sick <= 0) { p.sick = 0; } }
     if (p.age > 58 && chance((p.age - 58) * 0.03 / AGE_DAYS_PER_YEAR * 2)) (s._toKill ||= []).push([p, 'morreu de velhice']);
   }
@@ -369,6 +389,12 @@ function dailyTick(s, th, offline) {
   const dis = 0.014 * Math.sqrt(pop) * san * (wells ? 0.6 : 1) * (th.season === 3 ? 1.6 : 1) * (over ? 1.4 : 1);
   if (pop > 1 && chance(dis)) { const v = pick(s.people.filter(p => !p.sick)); if (v) { v.sick = 4; chron(s, `${v.name} adoeceu.`, 'bad'); } }
   for (const p of s.people.filter(q => q.sick > 0)) if (chance(0.12 * san)) { const v = pick(s.people.filter(q => !q.sick)); if (v) { v.sick = 4; } }
+  // racionamento de emergência automático (e retorno ao normal quando há folga)
+  if (s.policies.autoJobs) {
+    const fdn = foodDays(s);
+    if (!s.policies.ration && fdn < 4 && s.people.length >= 4) { s.policies.ration = true; s.flags.autoRation = true; chron(s, 'A comida está acabando: o conselho decretou racionamento.', 'policy'); if (!offline) toast(s, 'Racionamento de emergência ativado', 'bad', '🍞'); }
+    else if (s.policies.ration && s.flags.autoRation && fdn > 10) { s.policies.ration = false; s.flags.autoRation = false; chron(s, 'Comida em dia: o racionamento foi encerrado.', 'policy'); }
+  }
   // aquecimento no inverno
   s._cold = false;
   if (th.season === 3) {
@@ -397,7 +423,8 @@ function dailyTick(s, th, offline) {
   s._poolStamp = (s._poolStamp || 0) + 1;
   populationDaily(s, th, offline);
   // ferramentas e pesquisa
-  if (offline) autoBuild(s);
+  autoBuild(s); autoMilitary(s);
+  if (s.policies.autoEra && eraStatus(s)?.ready) advanceEra(s);
   worldDaily(s, offline);
   warDaily(s, offline);
   if (s._newEvents?.length) {
@@ -439,7 +466,7 @@ function populationDaily(s, th, offline) {
     if (!p.f || p.preg || p.age < 12 || p.age > 42 || !p.partner || day - p.lastBirth < 10) continue;
     const mate = s.people.find(q => q.id === p.partner);
     if (!mate || mate.age < 12) continue;
-    if (s.people.length >= d.beds + 1 || fd < 2.5 || joy < 42) continue;
+    if (s.people.length >= d.beds + 1 || fd < 5 || (s.rates.food || 0) < -4 || joy < 42) continue;
     if (chance(0.3)) p.preg = { due: day + 5 };
   }
   // casais
@@ -464,7 +491,7 @@ function populationDaily(s, th, offline) {
   // imigrantes
   const rep = reputation(s);
   const free = d.beds - s.people.length;
-  if (s.policies.border === 0 && free > 0 && fd >= 3 && rep >= 44) {
+  if (s.policies.border === 0 && free > 0 && fd >= 6 && (s.rates.food || 0) > -4 && rep >= 44) {
     const pr = 0.3 + (rep - 44) / 160;
     if (chance(pr) && s.people.length < 400) {
       const n = Math.min(free, rint(1, 3)), names = [];
@@ -635,10 +662,12 @@ export function autoAssign(s, maxChanges = 3) {
   if (!pool.length) return 0;
   const manual = adults.filter(p => !(p.job === 'livre' || p.auto) && p.job !== 'soldado' && p.job !== 'sabio');
   const N = adults.filter(p => p.job !== 'soldado' && p.job !== 'sabio').length;
+  const d0 = s._d;
   const slots = s._d.slots, fd = foodDays(s), wd = waterDays(s), th = s._th || timeInfo(s);
   const sites = s.buildings.some(b => !b.done);
   const winterSoon = th.season === 2 || th.season === 3;
   const cnt = {}; for (const p of manual) cnt[p.job] = (cnt[p.job] || 0) + 1;
+  const soldiersFixed = adults.filter(p => p.job === 'soldado' && !p.auto).length;
   const ok = j => jobUnlocked(s, j);
   // ---- 1) necessidades reais (mínimos) ----
   const T = {};
@@ -652,11 +681,13 @@ export function autoAssign(s, maxChanges = 3) {
   if (slots.pedreiro && s.era >= 3) T.pedreiro = slots.pedreiro;
   if (slots.ferreiro) T.ferreiro = slots.ferreiro;
   if (slots.comerciante) T.comerciante = slots.comerciante;
+  if (d0.soldierCap && jobUnlocked(s, 'soldado') && (s.threats.length || s.era >= 4 || (s.world?.kingdoms || []).some(k => k.known && k.pers === 'agressivo'))) T.soldado = Math.min(d0.soldierCap, Math.ceil(N * 0.1));
   if (crit) { delete T.pedreiro; T.lenhador = Math.min(T.lenhador || 0, slots.lenhador || 0); if (sites) T.construtor = 1; }
   const want = {}; let left = pool.length;
   const give = (j, n) => { if (!ok(j) || n <= 0 || left <= 0) return; const k = Math.min(n, left); want[j] = (want[j] || 0) + k; left -= k; };
   const prio = ['coletor', 'agricultor', 'construtor', 'cacador', 'lenhador', 'pedreiro', 'ferreiro', 'comerciante'];
-  for (const j of prio) if (T[j]) give(j, T[j] - (cnt[j] || 0));
+  cnt.soldado = soldiersFixed;
+  for (const j of prio.concat(['soldado'])) if (T[j]) give(j, T[j] - (cnt[j] || 0));
   // ---- 2) reparte o restante conforme o que está mais "magro" (prevenção) ----
   const cap = r => Math.max(1, capOf(s, r));
   const lack = r => Math.max(0, 1 - s.res[r] / (cap(r) * 0.85));
@@ -719,8 +750,9 @@ export function advanceEra(s) {
   if (!st || !st.ready) return false;
   spend(s, st.next.cost);
   s.era++;
+  if (s._offlineMode) (s._offEras ||= []).push(s.era);
   chron(s, `Marco histórico: o povoado agora é ${['', '', 'uma Vila', 'uma Cidade', 'um Reino', 'um Império'][s.era]}!`, 'era');
-  bus.emit('era', s.era);
+  if (!s._offlineMode) bus.emit('era', s.era);
   s._dirty = true;
   return true;
 }

@@ -118,10 +118,10 @@ export function defenders(s) {
 const defHpMult = s => 1 + (s._d?.defense || 0) / 140 + techFx(s, 'defense');
 
 // ---------- Aplicar baixas ----------
-function applyLosses(s, loss, ps, cause = 'tombou em combate') {
+function applyLosses(s, loss, ps, cause = 'tombou em combate', scale = 1) {
   const dead = [];
   for (const t in loss) {
-    let n = loss[t];
+    let n = Math.floor(loss[t] * scale + Math.random());
     if (t === 'archer' || t === 'recruta') { /* inclui caçadores/milícia */ }
     const pool = ps.filter(p => (p.unit || 'recruta') === t && !dead.includes(p));
     for (let i = 0; i < n && pool.length; i++) { const p = pool.splice(Math.floor(Math.random() * pool.length), 1)[0]; dead.push(p); }
@@ -150,7 +150,7 @@ export function resolveThreat(s, t, offline) {
   const playerWin = !r.win;
   const rep = { id: s.stats.battlesWon + s.stats.battlesLost + 1, kind: 'defesa', title: `Defesa contra ${t.label}`, win: playerWin, aName: t.label, dName: 'Seu povo' + (allyHelp ? ` + ${allyHelp}` : ''), rounds: r.rounds, a0: r.a0, d0: r.d0, aLoss: r.aLoss, dLoss: r.dLoss, day: th.day, lines: [] };
   // baixas do jogador (soldados primeiro)
-  const lost = applyLosses(s, r.dLoss, soldiersOf(s).concat(adultsOf(s).filter(p => p.job === 'cacador')));
+  const lost = applyLosses(s, r.dLoss, soldiersOf(s).concat(adultsOf(s).filter(p => p.job === 'cacador')), 'tombou em combate', playerWin ? 0.45 : 0.8);
   rep.lines.push(`Baixas: ${lost} morador(es). Inimigos derrotados: ${Object.values(r.aLoss).reduce((a, b) => a + b, 0)}.`);
   if (playerWin) {
     if (t.kind !== 'wolves') s.stats.battlesWon++;
@@ -257,4 +257,25 @@ export function marchTick(s, offline) {
 
 export function warDaily(s, offline) {
   for (const k of s.world?.kingdoms || []) if (k.vassal && k.defeated) { addRes(s, 'gold', 2); }
+}
+
+/** Treino automático (política de construção automática): mantém uma guarnição proporcional, usando só o excedente. */
+export function autoMilitary(s) {
+  if (!s.policies.autoBuild || !countB(s, 'barracks')) return;
+  const sol = soldiersOf(s).length;
+  const want = Math.min(s._d.soldierCap, Math.ceil(s.people.length * 0.12));
+  if (sol >= want || s.army.queue.length >= 2) return;
+  if (s.res.food < 60 || s.res.wood < 60) return;
+  const counts = unitCounts(s);
+  const opts = ['spear', 'archer', 'knight'].filter(u => !UNITS[u].tech || hasTech(s, UNITS[u].tech)).sort((a, b) => (counts[a] || 0) - (counts[b] || 0));
+  for (const u of opts) { if (!canTrain(s, u)) { trainEnqueue(s, u); return; } }
+}
+
+/** Maior força inimiga que os defensores atuais ainda derrotam (busca binária sobre a batalha real). Garante ataques "justos". */
+export function fairPower(s, cap, kind = 'army') {
+  const D = defenders(s), hp = defHpMult(s);
+  let lo = 3, hi = Math.max(4, cap);
+  if (simulateBattle(composeEnemy(hi, kind, s.era), D, { dHp: hp }).win === false) return hi;
+  for (let i = 0; i < 12; i++) { const mid = (lo + hi) / 2; const r = simulateBattle(composeEnemy(mid, kind, s.era), D, { dHp: hp }); if (r.win) hi = mid; else lo = mid; }
+  return lo;
 }

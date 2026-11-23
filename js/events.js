@@ -5,6 +5,7 @@ import { DAY_LEN, BUILDINGS, RES, ADULT_AGE, SEASON_DAYS, YEAR_DAYS } from './da
 import { timeInfo, countB, techFx } from './state.js';
 import { addRes, canAfford, spend, chron, toast, killSome, addPerson, avgJoy, foodDays, defensePower, soldiersOf, adultsOf, costStr, capOf, killPerson, bus } from './core.js';
 import { clamp, rnd, rint, chance, pick } from './util.js';
+import { fairPower } from './war.js';
 import { kingdomById, changeRel, payTribute, refuseTribute, acceptAlliance, startRoute, proposeFromEnvoy } from './world.js';
 
 const PRICE = { wood: 1, stone: 1.4, food: 1, water: 0.5, planks: 2.5, tools: 6, cloth: 4, iron: 3.5, gold: 5, weapons: 8, jewels: 15 };
@@ -13,6 +14,7 @@ const day = s => timeInfo(s).day;
 
 function threatPower(s, k = 1) { return Math.round((2 + s.era * 1.8 + day(s) * 0.05) * k); }
 function pushThreat(s, kind, power, label, delay = 0.3) {
+  if (kind === 'wolves' || kind === 'bandits') power = Math.max(3, Math.min(power, fairPower(s, power, kind) * (0.85 + Math.random() * 0.4)));
   const t = { id: (s._tid = (s._tid || 0) + 1), kind, power, label, at: s.t + DAY_LEN * delay };
   s.threats.push(t); return t;
 }

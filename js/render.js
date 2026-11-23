@@ -395,6 +395,7 @@ export class Renderer {
       this.spr(ctx, sp, 0, 0, bw, bh);
       ctx.restore();
     } else if (n.type === 'rock' || n.type === 'ore') {
+      if (n.type === 'rock' && n.amt <= 0.01) { this.shadow(ctx, x, y + 2, 10, 3, 0.2); return; }
       const sp = rockSprite(n.v, season, n.type === 'ore');
       this.shadow(ctx, x, y + 2, 20, 6, 0.25);
       const sc = 0.62; ctx.save(); ctx.translate(x, y);

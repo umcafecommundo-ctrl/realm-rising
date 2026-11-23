@@ -25,6 +25,7 @@ https://umcafecommundo-ctrl.github.io/realm-rising/ (publicado pelo workflow `.g
 * **Objetivos** (curto/médio/longo prazo) e **alertas coloridos** (verde = ok, amarelo = atenção, vermelho = perigo) ficam sempre visíveis.
 * Atalhos: `Espaço` pausa · `1/2/3` velocidade · `B` construir · `P` povo · `J` trabalho · `T` pesquisa · `Esc` cancela.
 * **Distribuição automática** (aba Trabalho): moradores "Livres" vão sozinhos para onde há necessidade (comida, água, obras, madeira, vagas nos prédios); escolhas manuais são respeitadas.
+* **Automação do conselho** (políticas, todas ligadas por padrão): **pesquisa automática** (primeiro o que a próxima era e os prédios exigem), **construção automática** (necessidades do reino e requisitos de era, só com excedente) e **evolução de era automática** quando requisitos e custo estão prontos. Conquistas de território (era Império) continuam manuais.
 * **Quando você está offline:** o conselho constrói o que o reino precisa (moradia, depósitos, fazendas, poço, serraria, mercado…) usando só o excedente e mantendo reservas; as obras são posicionadas em **distritos organizados** (residencial a oeste, agrícola ao norte, industrial a leste, cívico ao sul, real a noroeste, militar a sudeste) e obras suas fora do distrito são **realocadas** (grátis em obra; 25% do custo se prontas). Política "Construção automática" liga/desliga.
 * **Save seguro:** salva a cada 5 s, após cada interação e ao sair, com cópia de segurança; o relatório offline fica guardado até você lê-lo.
 * Botão **?** em cada painel explica o que ele faz.

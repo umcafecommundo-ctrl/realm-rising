@@ -6,6 +6,7 @@ import { step, refresh } from './sim.js';
 import { resolveAuto } from './events.js';
 import { foodDays, avgJoy } from './core.js';
 import { tidyManual } from './planner.js';
+function chronEra() {}
 
 /** Simula `realSeconds` de ausência. Devolve um relatório para exibição. */
 export function simulateOffline(s, realSeconds) {
@@ -25,6 +26,7 @@ export function simulateOffline(s, realSeconds) {
   // decisões pendentes: resolvidas pela política padrão
   for (const inst of [...s.ev.pending]) resolveAuto(s, inst);
   s.ev.pending = [];
+  s._offlineMode = true; s._offEras = [];
   s._offBudget = Math.max(2, Math.floor(s.people.length * 0.4));
   refresh(s);
 
@@ -40,7 +42,7 @@ export function simulateOffline(s, realSeconds) {
     minJoy = Math.min(minJoy, avgJoy(s));
     if (s.people.length === 0) break;
   }
-  s._offBudget = undefined;
+  s._offBudget = undefined; s._offlineMode = false;
   for (const p of s.people) { p.rt = {}; if (p.away > 0 && p.away < 1e8) p.away = Math.max(0, p.away - gameSecs); }
   refresh(s);
 
@@ -67,6 +69,7 @@ export function simulateOffline(s, realSeconds) {
   s._wasted = 0;
   if (!starveSec && !coldSec && !s._left && deaths === 0) lines.push({ lvl: 'good', text: 'Os estoques de comida e as políticas seguraram o reino com tranquilidade.' });
   if (after.era > before.era) lines.push({ lvl: 'good', text: `O reino avançou para a era ${ERAS[after.era].name}!` });
+  if (after.era > before.era) { try { chronEra(s, after.era); } catch (e) { /* ok */ } }
 
   s._offLog = s._offLog || [];
   const report = {

@@ -4,6 +4,7 @@ import { DAY_LEN, RES, ADULT_AGE } from './data.js';
 import { fbm, hash2, RNG, clamp, rnd, rint, chance, pick } from './util.js';
 import { addRes, canAfford, spend, chron, toast, costStr, adultsOf, defensePower, bus } from './core.js';
 import { timeInfo, countB } from './state.js';
+import { fairPower } from './war.js';
 
 export const WW = 16, WH = 12;
 export const HOME = { x: 2, y: 6 };
@@ -175,7 +176,7 @@ export function worldDaily(s, offline) {
   for (const k of w.kingdoms) {
     if (k.defeated) continue;
     // crescimento
-    const g = (k.pers === 'agressivo' ? 1.05 : k.pers === 'comerciante' ? 0.6 : 0.75) * (1 + s.era * 0.12) * rnd(0.6, 1.3);
+    const g = (k.pers === 'agressivo' ? 0.8 : k.pers === 'comerciante' ? 0.5 : 0.6) * (1 + s.era * 0.12) * rnd(0.6, 1.3);
     k.str = Math.min(500, k.str + g * (k.vassal ? 0.2 : 1));
     k.wealth += rnd(3, 9);
     // deriva de relações
@@ -298,7 +299,9 @@ export function doDiplo(s, k, id) {
 export function launchEnemyArmy(s, k, frac) {
   const eta = rnd(1, 1.6);
   const id = (s._tid = (s._tid || 0) + 1);
-  s.threats.push({ id, kind: 'army', from: k.id, power: Math.round(k.str * frac), label: `Exército de ${k.name}`, at: s.t + DAY_LEN * eta });
+  const cap = k.str * frac;
+  const fair = Math.max(5, fairPower(s, cap, 'army') * (0.85 + Math.random() * 0.4)); // ataques sempre enfrentáveis: seguem a força real da sua defesa
+  s.threats.push({ id, kind: 'army', from: k.id, power: Math.round(Math.min(cap, fair)), label: `Exército de ${k.name}`, at: s.t + DAY_LEN * eta });
   chron(s, `${k.name} marcha contra nós!`, 'war');
   toast(s, `${k.name} está atacando!`, 'bad', '⚔️');
 }
