@@ -367,6 +367,7 @@ export class UI {
     const def = BUILDINGS[b.type];
     const nb = placeBuilding(this.s, b.type, b.x, b.y);
     if (nb) {
+      nb.manual = true;
       if (!quiet) this.toast(`${def.name}: obra iniciada`, 'good', def.icon);
       if (!def.repeat && !keep) this.cancelBuild();
       else this.moveGhost({ x: (b.x + def.w / 2) * TILE, y: (b.y + def.h / 2) * TILE });
@@ -407,7 +408,9 @@ export class UI {
   }
   pumpEvents() {
     const s = this.s;
-    if (this.modals.length || !s.ev.pending.length || this.game.booting) return;
+    if (this.modals.length || this.game.booting) return;
+    if (s.pendingReports?.length) { this.showOffline(s.pendingReports[0], true); return; }
+    if (!s.ev.pending.length) return;
     this.showEvent(s.ev.pending[0]);
   }
   showEvent(inst) {
@@ -424,7 +427,7 @@ export class UI {
       el.querySelector('[data-done]').addEventListener('click', () => this.closeModal());
     });
   }
-  showOffline(rep) {
+  showOffline(rep, fromPending) {
     const s = this.s;
     const dres = Object.entries(rep.dRes).map(([r, v]) => `<span class="delta ${v > 0 ? 'p' : 'n'}">${rimg(r)}${v > 0 ? '+' : ''}${v}</span>`).join('');
     const vText = { prosperou: ['🌟', 'O reino prosperou durante sua ausência!'], estavel: ['⚖️', 'O reino se manteve estável.'], crise: ['🔥', 'O reino enfrentou uma crise!'] }[rep.verdict];
@@ -443,9 +446,10 @@ export class UI {
       <div class="sec">Recursos</div><div>${dres || '<span class="sub">Sem mudanças relevantes.</span>'}</div>
       ${rep.newTechs.length ? `<div class="sec">Descobertas</div><div class="ll good">🔬 ${rep.newTechs.join(', ')}</div>` : ''}
       ${evs ? `<div class="sec">Eventos resolvidos</div>${evs}` : ''}${bat ? `<div class="sec">Batalhas</div>${bat}` : ''}
+      ${(rep.autoBuilt?.length) ? `<div class="sec">Obras do conselho</div><div class="ll good">🏗️ ${rep.autoBuilt.join(', ')}</div>` : ''}${(rep.moved?.length) ? `<div class="sec">Realocações</div>${rep.moved.map(m => `<div class="ll">📐 ${esc(m)}</div>`).join('')}` : ''}
       ${chr ? `<div class="sec">Crônica</div>${chr}` : ''}
       <button class="btn pri" data-done style="width:100%;margin-top:14px">Retomar o reino</button></div>`;
-    const el = this.openModal(html, { closable: false });
+    const el = this.openModal(html, { closable: false, onClose: () => { if (fromPending) { const i = s.pendingReports.indexOf(rep); if (i >= 0) s.pendingReports.splice(i, 1); this.game.saveNow(); } } });
     el.querySelector('[data-done]').addEventListener('click', () => this.closeModal());
   }
   showEraCelebration(era) {

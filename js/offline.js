@@ -5,6 +5,7 @@ import { timeInfo } from './state.js';
 import { step, refresh } from './sim.js';
 import { resolveAuto } from './events.js';
 import { foodDays, avgJoy } from './core.js';
+import { tidyManual } from './planner.js';
 
 /** Simula `realSeconds` de ausência. Devolve um relatório para exibição. */
 export function simulateOffline(s, realSeconds) {
@@ -17,7 +18,8 @@ export function simulateOffline(s, realSeconds) {
   const names0 = new Map(s.people.map(p => [p.id, p.name]));
   const techs0 = new Set(Object.keys(s.tech.done));
   const stats0 = { births: s.stats.births, deaths: s.stats.deaths, immigrants: s.stats.immigrants, won: s.stats.battlesWon, lost: s.stats.battlesLost };
-  s._offLog = []; s._offBattles = []; s._left = 0; s._offSeasons = 0;
+  s._offLog = []; s._offBattles = []; s._left = 0; s._offSeasons = 0; s._autoBuilt = []; s._moved = [];
+  if (s.policies.autoBuild) tidyManual(s); else for (const b of s.buildings) b.manual = false;
   let starveSec = 0, coldSec = 0, minFood = s.res.food, minJoy = 100, fullSec = 0;
 
   // decisões pendentes: resolvidas pela política padrão
@@ -71,8 +73,8 @@ export function simulateOffline(s, realSeconds) {
     realSeconds: secs, capped, days: daysGone, before, after, dRes, births, deaths, immigrants: imm, left: s._left || 0,
     newTechs, events: s._offLog, battles: (s._offBattles || []).map(b => ({ title: b.title, win: b.win, lines: b.lines })), chron: chron.slice(-40), lines, verdict,
     seasons: s._offSeasons || 0, minFood: Math.round(minFood), starveDays: Math.round(starveSec / DAY_LEN * 10) / 10,
-    builds: after.buildings - before.buildings, lostNames: [], vulnerable: after.pop === 0,
+    builds: after.buildings - before.buildings, autoBuilt: s._autoBuilt || [], moved: s._moved || [], lostNames: [], vulnerable: after.pop === 0,
   };
-  s._offLog = []; s._offBattles = [];
+  s._offLog = []; s._offBattles = []; s._autoBuilt = []; s._moved = [];
   return report;
 }

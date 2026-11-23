@@ -47,13 +47,13 @@ async function boot() {
   let report = null;
   if (!fresh) {
     const away = (Date.now() - s.lastSaved) / 1000;
-    if (away > 45) { try { report = simulateOffline(s, away); } catch (e) { console.error('offline falhou', e); } }
+    if (away > 45) { try { report = simulateOffline(s, away); s.pendingReports.push(report); save(s); } catch (e) { console.error('offline falhou', e); } }
   }
   game.ui.updateHUD(s); game.ui.updateGoals(s); game.ui.updateAlerts(s);
   setTimeout(() => {
     document.getElementById('boot').classList.add('gone');
     game.booting = false;
-    if (report) game.ui.showOffline(report);
+    game.ui.pumpEvents();
   }, 450);
 
   // laço principal
@@ -68,7 +68,7 @@ async function boot() {
     game.ui.update(dt);
     game.tut.update(dt);
     saveT += dt;
-    if (saveT > 10) { saveT = 0; save(st); }
+    if (saveT > 5) { saveT = 0; save(st); }
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
@@ -80,10 +80,18 @@ async function boot() {
       const away = (Date.now() - hiddenAt) / 1000; hiddenAt = null; last = performance.now();
       if (away > 45) {
         game.s.lastSaved = Date.now() - away * 1000;
-        try { const rep = simulateOffline(game.s, away); game.ui.showOffline(rep); } catch (e) { console.error(e); }
+        try { const rep = simulateOffline(game.s, away); game.s.pendingReports.push(rep); save(game.s); game.ui.pumpEvents(); } catch (e) { console.error(e); }
       }
     }
   });
+  // salva logo após qualquer interação (debounce) e em todos os eventos de saída
+  let soon = 0; const saveSoon = () => { clearTimeout(soon); soon = setTimeout(() => save(game.s), 700); };
+  game.saveSoon = saveSoon;
+  document.addEventListener('pointerup', saveSoon, true); document.addEventListener('keyup', saveSoon, true);
+  for (const ev of ['bought', 'placed', 'built', 'era', 'tech', 'quest', 'achievement', 'demolished', 'event']) bus.on(ev, saveSoon);
+  document.addEventListener('freeze', () => save(game.s));
+  window.addEventListener('blur', () => save(game.s));
+  try { navigator.storage?.persist?.(); } catch (e) { /* ok */ }
   window.addEventListener('pagehide', () => save(game.s));
   window.addEventListener('beforeunload', () => save(game.s));
 }

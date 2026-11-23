@@ -98,7 +98,7 @@ export function newGame(seed = (Math.random() * 1e9) | 0) {
     res: { wood: 6, stone: 0, food: 18, water: 14, planks: 0, tools: 0, cloth: 0, iron: 0, gold: 0, weapons: 0, jewels: 0 },
     nodes, nextNid: nextId, nextPid: 1, nextBid: 1,
     people: [], buildings: [], roads: [],
-    policies: { autoJobs: true, tax: 1, ration: false, overtime: false, conscription: false, border: 0, stance: 0 },
+    policies: { autoJobs: true, autoBuild: true, tax: 1, ration: false, overtime: false, conscription: false, border: 0, stance: 0 },
     festival: { until: 0, cooldownUntil: 0 },
     tech: { done: {}, current: null, rp: 0, progress: 0 },
     quests: { done: {}, claimed: {} }, achievements: {},
@@ -107,7 +107,7 @@ export function newGame(seed = (Math.random() * 1e9) | 0) {
     weather: { type: 'clear', until: DAY_LEN * 1.6, intensity: 0 },
     ev: { cooldownUntil: DAY_LEN * 3.2, pending: [], counts: {} },
     tut: { step: 0, done: false },
-    world: null, army: { units: {}, queue: [] }, territories: [],
+    world: null, army: { units: {}, queue: [] }, territories: [], pendingReports: [],
     lastEraSeen: 1, bestPop: 2, rates: {}, toastQueue: [],
   };
   const man = makePerson(s, { f: false, name: 'Tomás', age: 24, job: 'livre', x: (CENTER.x - 2) * TILE, y: (CENTER.y + 1) * TILE });
@@ -214,18 +214,32 @@ export function serialize(s) {
   s.lastSaved = Date.now();
   return JSON.stringify(s, (k, v) => (k[0] === '_' || k === 'rt') ? undefined : v);
 }
+export const BAK_KEY = SAVE_KEY + '-bak';
+/** Salva com verificação e cópia de segurança (a versão anterior é mantida em outra chave). */
 export function save(s) {
-  try { localStorage.setItem(SAVE_KEY, serialize(s)); return true; } catch (e) { console.warn('save failed', e); return false; }
+  try {
+    let str = serialize(s);
+    const prev = localStorage.getItem(SAVE_KEY);
+    try { localStorage.setItem(SAVE_KEY, str); }
+    catch (e) { s.chronicle = s.chronicle.slice(-80); str = serialize(s); localStorage.setItem(SAVE_KEY, str); } // cota cheia: enxuga a crônica
+    if (prev && Date.now() - (s._bakAt || 0) > 45000) { try { localStorage.setItem(BAK_KEY, prev); s._bakAt = Date.now(); } catch (e) { /* sem espaço */ } }
+    return localStorage.getItem(SAVE_KEY) === str;
+  } catch (e) { console.warn('save failed', e); return false; }
+}
+function parseSave(raw) {
+  if (!raw) return null;
+  const s = JSON.parse(raw);
+  if (!s || s.v !== 1 || !Array.isArray(s.people) || !s.res || !Array.isArray(s.buildings)) return null;
+  return s;
 }
 export function load() {
-  try {
-    const raw = localStorage.getItem(SAVE_KEY);
-    if (!raw) return null;
-    const s = JSON.parse(raw);
-    if (!s || s.v !== 1) return null;
-    return migrate(s);
-  } catch (e) { console.warn('load failed', e); return null; }
+  for (const key of [SAVE_KEY, BAK_KEY]) {
+    try { const s = parseSave(localStorage.getItem(key)); if (s) { if (key === BAK_KEY) console.warn('save principal inválido: usando cópia de segurança'); return migrate(s); } }
+    catch (e) { console.warn('load failed', key, e); }
+  }
+  return null;
 }
+
 /** Completa campos que saves antigos podem não ter (compatibilidade entre versões). */
 export function migrate(s) {
   const d = newGame(s.seed);
@@ -233,10 +247,11 @@ export function migrate(s) {
   for (const k of ['achievements', 'rates']) s[k] = s[k] || {};
   for (const k of ['threats', 'territories', 'chronicle', 'roads', 'toastQueue']) s[k] = s[k] || [];
   s.army = s.army || { units: {}, queue: [] };
+  s.pendingReports = s.pendingReports || [];
   s.tut = s.tut || { step: 0, done: true };
   s.bestPop = s.bestPop || s.people.length;
   for (const p of s.people) { p.rt = {}; if (p.away == null) p.away = 0; p.skill = p.skill || {}; p.n = { hunger: 80, sleep: 80, joy: 60, health: 100, ...(p.n || {}) }; }
   s.toastQueue = []; s.paused = false; // pausas de modal são transitórias
   return s;
 }
-export function wipeSave() { try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* ignora */ } }
+export function wipeSave() { try { localStorage.removeItem(SAVE_KEY); localStorage.removeItem(BAK_KEY); } catch (e) { /* ignora */ } }

@@ -157,6 +157,7 @@ export const UNITS = {
 // ---------- Políticas ----------
 export const POLICIES = {
   autoJobs: { name: 'Distribuição automática', era: 1, bool: true, icon: '🧭', desc: 'Moradores sem função fixa são enviados sozinhos para onde há mais necessidade (comida, água, obras, madeira, vagas nos prédios). Quem você escolhe manualmente não é mexido.' },
+  autoBuild: { name: 'Construção automática (ausente)', era: 1, bool: true, icon: '🏗️', desc: 'Quando você está offline, o conselho ergue o que o reino precisa (moradia, depósitos, fazendas, poço...) usando só o excedente, e reorganiza obras suas fora do lugar em distritos.' },
   tax:   { name: 'Impostos', era: 3, options: ['Baixos', 'Médios', 'Altos'], icon: '🪙',
     desc: ['+6 felicidade, pouco ouro.', 'Equilíbrio.', '+60% de ouro, −12 felicidade.'] },
   ration: { name: 'Racionamento', era: 1, bool: true, icon: '🍞', desc: 'Consumo de comida e água −30%, mas −8 de felicidade.' },

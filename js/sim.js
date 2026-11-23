@@ -5,6 +5,7 @@ import { DAY_LEN, YEAR_DAYS, SEASON_DAYS, TILE, MAP_W, MAP_H, BUILDINGS, RES, RE
 import { timeInfo, isNight, recalc, bdef, countB, techFx, hasTech, eraRadius, unlocked, jobUnlocked, CENTER, isWater, rebuildBlocked, makePerson } from './state.js';
 import { bus, addRes, spend, canAfford, chron, toast, floatText, adultsOf, dailyConsumption, foodDays, waterDays, avgJoy, killPerson, addPerson, defensePower, globalMult, personMult, gainSkill, soldiersOf, capOf } from './core.js';
 import { updatePerson, updateAnimals, eatNow, autoJob } from './ai.js';
+import { autoBuild } from './planner.js';
 import { rollEvent, resolveAuto, makeInstance } from './events.js';
 import { worldDaily, worldSlow, initWorld } from './world.js';
 import { warDaily, resolveThreat, trainTick, marchTick } from './war.js';
@@ -396,6 +397,7 @@ function dailyTick(s, th, offline) {
   s._poolStamp = (s._poolStamp || 0) + 1;
   populationDaily(s, th, offline);
   // ferramentas e pesquisa
+  if (offline) autoBuild(s);
   worldDaily(s, offline);
   warDaily(s, offline);
   if (s._newEvents?.length) {
