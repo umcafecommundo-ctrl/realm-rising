@@ -1,0 +1,41 @@
+// Fluxo em celular (toque): abrir construir, escolher, posicionar com toque, confirmar; pinça/arrastar via eventos de ponteiro.
+const { chromium } = require('playwright');
+(async () => {
+  const out = process.argv[2] || '/tmp/mb';
+  const browser = await chromium.launch();
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 780 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true });
+  const page = await ctx.newPage();
+  const errs = [];
+  page.on('console', m => { if (m.type() === 'error') errs.push(m.text()); });
+  page.on('pageerror', e => errs.push('PAGEERROR: ' + e.message + '\n' + (e.stack || '').split('\n').slice(0, 5).join('\n')));
+  await page.goto('http://localhost:8080/');
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+  await page.waitForTimeout(1300);
+  await page.screenshot({ path: out + '-0.png' });
+  await page.evaluate(() => { const g = window.__game; g.s.tut.done = true; g.tut.hide(); g.s.res.wood = 60; });
+  await page.tap('#tab-build');
+  await page.waitForTimeout(300);
+  await page.tap('[data-act="build:shelter"]');
+  await page.waitForTimeout(300);
+  console.log('build mode', await page.evaluate(() => !!window.__game.ui.build));
+  await page.touchscreen.tap(195, 520);
+  await page.waitForTimeout(250);
+  await page.screenshot({ path: out + '-1.png' });
+  await page.tap('[data-b="ok"]');
+  await page.waitForTimeout(300);
+  console.log('shelters', await page.evaluate(() => window.__game.s.buildings.filter(b => b.type === 'shelter').length));
+  await page.evaluate(() => window.__game.fast(60));
+  await page.waitForTimeout(400);
+  // toque numa pessoa/prédio abre o inspetor
+  const pos = await page.evaluate(() => { const g = window.__game; const p = g.s.people[0]; const sp = g.r.toScreen(p.x, p.y - 10); return sp; });
+  await page.touchscreen.tap(pos.x, pos.y);
+  await page.waitForTimeout(300);
+  console.log('selected', await page.evaluate(() => window.__game.ui.sel));
+  await page.screenshot({ path: out + '-2.png' });
+  await page.tap('#tab-jobs');
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: out + '-3.png' });
+  console.log('ERRS', JSON.stringify(errs, null, 1));
+  await browser.close();
+})();

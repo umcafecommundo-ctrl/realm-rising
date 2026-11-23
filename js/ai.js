@@ -176,7 +176,7 @@ function deposit(s, p) {
   if (!c) return;
   const real = addRes(s, c.res, c.amt);
   if (real > 0.4) floatText(p.x, p.y - 22, `+${Math.round(real)}`, '#fff', c.res);
-  else if (real < c.amt - 0.4) floatText(p.x, p.y - 22, 'Cheio!', '#ff9b7a');
+  else if (real < c.amt - 0.4 && s.t - (s._fullMsg || -9) > 5) { s._fullMsg = s.t; floatText(p.x, p.y - 22, 'Armazém cheio!', '#ff9b7a'); }
   p.rt.carry = null;
 }
 

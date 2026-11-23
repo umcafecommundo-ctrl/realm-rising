@@ -23,6 +23,7 @@ export function simulateOffline(s, realSeconds) {
   // decisões pendentes: resolvidas pela política padrão
   for (const inst of [...s.ev.pending]) resolveAuto(s, inst);
   s.ev.pending = [];
+  s._offBudget = Math.max(2, Math.floor(s.people.length * 0.4));
   refresh(s);
 
   const DT = 2;
@@ -37,6 +38,7 @@ export function simulateOffline(s, realSeconds) {
     minJoy = Math.min(minJoy, avgJoy(s));
     if (s.people.length === 0) break;
   }
+  s._offBudget = undefined;
   for (const p of s.people) { p.rt = {}; if (p.away > 0 && p.away < 1e8) p.away = Math.max(0, p.away - gameSecs); }
   refresh(s);
 

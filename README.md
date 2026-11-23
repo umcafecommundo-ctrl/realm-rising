@@ -1,2 +1,80 @@
-# realm-rising
-Jogo 2D de construção de reino idle: comece com 2 pessoas e erga um império com suas escolhas, comércio, diplomacia e guerra.
+# 🏰 Realm Rising
+
+Jogo 2D de **construção de reino + estratégia idle** que roda direto no navegador (desktop e celular).
+Você começa com **duas pessoas e uma fogueira** numa clareira e, por escolhas graduais, transforma o acampamento num **império**.
+Os moradores trabalham sozinhos (cortam árvores, colhem, constroem, caçam); você é o líder: define prioridades, constrói, decide políticas e reage a eventos.
+
+> Canvas 2D puro + módulos ES, **sem build e sem dependências** — toda a arte (terreno, árvores, prédios, personagens, ícones) é gerada proceduralmente em tempo de execução. Progresso salvo em `localStorage`.
+
+## Como rodar
+
+```bash
+node test/serve.mjs 8080      # servidor estático mínimo (qualquer servidor estático serve)
+# abra http://localhost:8080
+```
+
+Também funciona publicado como site estático (GitHub Pages, Netlify, etc.): é só servir a pasta.
+
+## Como jogar
+
+* **Câmera:** arraste para mover; roda do mouse / pinça para zoom. Toque num morador ou prédio para ver detalhes.
+* **Tutorial guiado** no primeiro jogo (setas, destaques, uma mecânica por vez); dicas contextuais aparecem quando algo novo é liberado.
+* **Objetivos** (curto/médio/longo prazo) e **alertas coloridos** (verde = ok, amarelo = atenção, vermelho = perigo) ficam sempre visíveis.
+* Atalhos: `Espaço` pausa · `1/2/3` velocidade · `B` construir · `P` povo · `J` trabalho · `T` pesquisa · `Esc` cancela.
+* Botão **?** em cada painel explica o que ele faz.
+
+### O que existe
+
+| Área | Conteúdo |
+|---|---|
+| **Eras** | Acampamento → Vila → Cidade → Reino → Império (cada uma libera construções, profissões e mecânicas; território cresce) |
+| **Recursos** | madeira, pedra, comida, água · tábuas, ferramentas, tecido, ferro · ouro, armas, joias — com **cadeias de produção** e **armazenamento limitado** |
+| **Povo** | nome, idade, fome/sono/humor/saúde, habilidade que cresce com o uso; casais, filhos, imigrantes, doenças, fugas; 11 profissões |
+| **Construções** | 25 tipos (fogueira, abrigo, casa, fazenda, poço, serraria, depósito, mercado, ferraria, mina, quartel, muralha, taverna, castelo, catedral, porto, academia, estrada, monumento, Grande Maravilha…) com **fundação → andaime → pronto** |
+| **Tecnologia** | árvore vertical de 18 pesquisas que liberam construções e dão bônus |
+| **Políticas** | impostos, racionamento, trabalho extra, recrutamento obrigatório, fronteira, postura diplomática, festivais |
+| **Eventos** | 20 eventos com 2–3 opções (inverno rigoroso, praga, doença, incêndio, lobos, bandidos, mercador, refugiados, minério, rebelião, heróis…) |
+| **Mundo** | mapa-múndi 16×12 com **névoa de guerra**, batedores, 4 reinos de IA (pacífico / agressivo / comerciante), diplomacia (presentes, paz, aliança, tributo), rotas comerciais com caravanas |
+| **Guerra** | 5 tipos de unidade com contra-ataques, treino no quartel, batalhas automáticas com **animação e relatório**, defesa (muralhas/castelo), conquista de territórios que rendem recursos |
+| **Offline** | até **12 h** de ausência (1 s offline = 0,2 s de jogo, 70% de eficiência). Ao voltar: **Relatório do Reino** (população, recursos, eventos resolvidos, batalhas, fome/frio/fugas, veredito) |
+| **Visual** | dia/noite com luz de fogueira, tochas e janelas acesas · 4 estações (neve no inverno) · chuva e tempestade com raios · folhas, fumaça, faíscas, poeira, vaga-lumes · números flutuantes |
+
+### Dificuldade
+Recursos são escassos no início, o inverno exige preparação (sem colheita; lenha para aquecer) e más decisões geram crises reais.
+Mas o jogo **sempre avisa antes** ("Comida acaba em 2 dias", "Inverno em 5 dias: faltam ~40 de comida"), e é possível se recuperar:
+se o reino for esvaziado, sobreviventes chegam para recomeçar; offline, o povo **emigra** antes de morrer em massa.
+
+## Arquitetura (`js/`)
+
+| Módulo | Responsabilidade |
+|---|---|
+| `data.js` | Todas as definições estáticas: recursos, profissões, construções, eras, tecnologias, unidades, políticas, constantes de tempo |
+| `state.js` | Estado do jogo, geração do mapa (semente), save/load (`localStorage`), migração |
+| `core.js` | Ajudantes de lógica sem DOM (recursos, pessoas, defesa, barramento de eventos) |
+| `sim.js` | Relógio, estações, clima, necessidades, produção, população, API de ações (construir, trabalhos, políticas, eras) e alertas |
+| `ai.js` + `path.js` | Comportamento dos moradores (tarefas, A*) e animais — modo "ao vivo" |
+| `events.js` | Eventos aleatórios com escolhas e a escolha automática usada offline |
+| `world.js` / `war.js` | Mapa-múndi, reinos de IA, diplomacia, comércio · exército, batalhas e conquista |
+| `offline.js` | Simulação da ausência + montagem do relatório |
+| `quests.js` | Objetivos e conquistas |
+| `art.js` / `art_b.js` | Arte procedural (terreno, árvores, rochas, ícones · construções, andaimes) |
+| `render.js` | Câmera, desenho do mundo, partículas, iluminação, clima, entrada por mouse/toque |
+| `ui.js` / `panels.js` / `worldui.js` / `tutorial.js` | HUD, painéis, modais, mapa-múndi/guerra, tutorial |
+| `main.js` | Inicialização, laço principal, autosave (10 s) e offline |
+
+A simulação (`sim`, `ai`, `events`, `world`, `war`, `offline`) **não depende do DOM** — roda em Node para testes.
+Valores de equilíbrio ficam em `data.js` (`DAY_LEN`, `OFFLINE_SCALE`, `OFFLINE_EFF`, `OUT_RATE`, custos…).
+
+## Testes
+
+```bash
+npm test                    # fumaça da simulação (headless)
+node test/stress.mjs        # eventos, mundo, guerra, offline de 12 h e save/load
+node test/bot.mjs 120 777   # bot joga 120 min de jogo (OFF=8 simula 8 h offline ao final)
+node test/ui.cjs desktop    # screenshots de painéis (precisa do servidor e de Playwright)
+node test/flow.cjs desktop  # tutorial por cliques, construção, relatório offline
+node test/mobile.cjs        # fluxo por toque em viewport de celular
+```
+
+## Licença
+MIT

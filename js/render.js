@@ -53,11 +53,21 @@ export class Renderer {
   }
   resize() {
     const r = this.cv.getBoundingClientRect();
-    this.dpr = Math.min(window.devicePixelRatio || 1, 2);
+    this.dpr = Math.max(0.6, Math.min(window.devicePixelRatio || 1, 2) * (this.quality || 1));
     this.w = Math.max(100, r.width); this.h = Math.max(100, r.height);
     this.cv.width = Math.round(this.w * this.dpr); this.cv.height = Math.round(this.h * this.dpr);
     this.light.width = Math.ceil(this.w / 2); this.light.height = Math.ceil(this.h / 2);
     this.clampCam();
+  }
+  /** Qualidade adaptativa: se a taxa de quadros cair, reduz a resolução interna do canvas. */
+  perf(rawDt) {
+    this.ema = this.ema === undefined ? rawDt : this.ema * 0.95 + rawDt * 0.05;
+    this.pt = (this.pt || 0) + rawDt;
+    if (this.pt < 3) return;
+    this.pt = 0;
+    const q = this.quality || 1;
+    if (this.ema > 0.036 && q > 0.6) { this.quality = Math.max(0.6, q - 0.15); this.resize(); }
+    else if (this.ema < 0.019 && q < 1) { this.quality = Math.min(1, q + 0.1); this.resize(); }
   }
   clampCam() {
     const c = this.cam;
@@ -190,33 +200,55 @@ export class Renderer {
   }
 
   // ---------- Terreno ----------
-  drawTerrain(s, th, tx0, ty0, tx1, ty1) {
-    const ctx = this.ctx, T = this.time;
-    const season = th.season, nextS = (season + 1) % 4;
-    const blendT = th.dOfSeason >= 5 ? clamp((th.dOfSeason - 5 + th.frac), 0, 1) : (th.dOfSeason === 0 ? 0 : 0);
-    const A = terrainTiles(season), B = blendT > 0.02 ? terrainTiles(nextS) : null;
-    const terr = s._terr || (s._terr = null);
-    const water = (s._terr && s._terr.water) || null;
-    if (!water) return;
-    const winter = season === 3;
-    for (let ty = ty0; ty <= ty1; ty++) for (let tx = tx0; tx <= tx1; tx++) {
+  /** Padrão repetível (8x8 tiles com variantes) por estação: preenche o chão visível com uma única chamada. */
+  groundPattern(season) {
+    this._pat = this._pat || {};
+    if (this._pat[season]) return this._pat[season];
+    const tiles = terrainTiles(season), N = 8, S = TILE * SC;
+    const c = document.createElement('canvas'); c.width = N * S; c.height = N * S;
+    const x = c.getContext('2d');
+    for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) x.drawImage(tiles[Math.floor(hash2(i, j, 5) * tiles.length)], i * S, j * S, S, S);
+    const pat = this.ctx.createPattern(c, 'repeat');
+    pat.setTransform(new DOMMatrix().scale(1 / SC));
+    return (this._pat[season] = pat);
+  }
+  /** Lista estática de margens de água e tiles de água (calculada uma vez por mapa). */
+  prepShore(water) {
+    if (this._shoreFor === water) return;
+    this._shoreFor = water; this.shore = []; this.waterList = [];
+    for (let ty = 0; ty < MAP_H; ty++) for (let tx = 0; tx < MAP_W; tx++) {
       const i = ty * MAP_W + tx;
+      if (water[i]) { this.waterList.push([tx, ty]); continue; }
+      const l = tx > 0 && water[i - 1], r = tx < MAP_W - 1 && water[i + 1], u = ty > 0 && water[i - MAP_W], d = ty < MAP_H - 1 && water[i + MAP_W];
+      if (l || r || u || d) this.shore.push([tx, ty, l, r, u, d]);
+    }
+  }
+  drawTerrain(s, th, tx0, ty0, tx1, ty1) {
+    const ctx = this.ctx, T = this.time, V = this.view;
+    const season = th.season, nextS = (season + 1) % 4;
+    const blendT = th.dOfSeason >= 5 ? clamp((th.dOfSeason - 5 + th.frac), 0, 1) : 0;
+    const water = s._terr && s._terr.water;
+    if (!water) return;
+    this.prepShore(water);
+    const winter = season === 3;
+    const x0 = Math.max(0, V.x0), y0 = Math.max(0, V.y0), x1 = Math.min(WW, V.x1), y1 = Math.min(WH, V.y1);
+    ctx.fillStyle = this.groundPattern(season); ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
+    if (blendT > 0.02) { ctx.globalAlpha = blendT; ctx.fillStyle = this.groundPattern(nextS); ctx.fillRect(x0, y0, x1 - x0, y1 - y0); ctx.globalAlpha = 1; }
+    // margem arenosa junto à água
+    const sand = winter ? '#e8e8ea' : season === 2 ? '#cdb888' : '#dcc896';
+    for (const [tx, ty, l, r, u, d] of this.shore) {
+      if (tx < tx0 || tx > tx1 || ty < ty0 || ty > ty1) continue;
       const px = tx * TILE, py = ty * TILE;
-      if (water[i]) { this.drawWater(ctx, water, tx, ty, px, py, season, T, blendT); continue; }
-      const v = Math.floor(hash2(tx, ty, 5) * 8);
-      ctx.drawImage(A[v], px, py, TILE + 0.6, TILE + 0.6);
-      if (B) { ctx.globalAlpha = blendT; ctx.drawImage(B[v], px, py, TILE + 0.6, TILE + 0.6); ctx.globalAlpha = 1; }
-      // margem arenosa junto à água
-      const wl = tx > 0 && water[i - 1], wr = tx < MAP_W - 1 && water[i + 1], wu = ty > 0 && water[i - MAP_W], wd = ty < MAP_H - 1 && water[i + MAP_W];
-      if (wl || wr || wu || wd) {
-        const sand = winter ? '#e8e8ea' : season === 2 ? '#cdb888' : '#dcc896';
-        ctx.fillStyle = sand;
-        if (wl) ctx.fillRect(px, py, 6, TILE); if (wr) ctx.fillRect(px + TILE - 6, py, 6, TILE);
-        if (wu) ctx.fillRect(px, py, TILE, 6); if (wd) ctx.fillRect(px, py + TILE - 6, TILE, 6);
-        ctx.fillStyle = 'rgba(80,60,30,0.2)';
-        if (wl) ctx.fillRect(px + 5, py, 1.5, TILE); if (wr) ctx.fillRect(px + TILE - 6.5, py, 1.5, TILE);
-        if (wu) ctx.fillRect(px, py + 5, TILE, 1.5); if (wd) ctx.fillRect(px, py + TILE - 6.5, TILE, 1.5);
-      }
+      ctx.fillStyle = sand;
+      if (l) ctx.fillRect(px, py, 6, TILE); if (r) ctx.fillRect(px + TILE - 6, py, 6, TILE);
+      if (u) ctx.fillRect(px, py, TILE, 6); if (d) ctx.fillRect(px, py + TILE - 6, TILE, 6);
+      ctx.fillStyle = 'rgba(80,60,30,0.2)';
+      if (l) ctx.fillRect(px + 5, py, 1.5, TILE); if (r) ctx.fillRect(px + TILE - 6.5, py, 1.5, TILE);
+      if (u) ctx.fillRect(px, py + 5, TILE, 1.5); if (d) ctx.fillRect(px, py + TILE - 6.5, TILE, 1.5);
+    }
+    for (const [tx, ty] of this.waterList) {
+      if (tx < tx0 || tx > tx1 || ty < ty0 || ty > ty1) continue;
+      this.drawWater(ctx, water, tx, ty, tx * TILE, ty * TILE, season, T, blendT);
     }
     // variação de cor em grande escala
     ctx.globalAlpha = winter ? 0.35 : 0.85;
@@ -649,8 +681,8 @@ export class Renderer {
     const a = ambient(th.hour);
     let [r, g, b, al] = a;
     const wt = s.weather.type;
-    if (wt === 'rain') { al = Math.min(0.8, al + 0.14); r *= 0.8; g *= 0.85; b = Math.min(255, b * 1.05 + 10); }
-    if (wt === 'storm') { al = Math.min(0.85, al + 0.3); r *= 0.6; g *= 0.65; }
+    if (wt === 'rain') { const k = 0.55; r = r + (85 - r) * k; g = g + (100 - g) * k; b = b + (130 - b) * k; al = Math.min(0.8, al + 0.14); }
+    if (wt === 'storm') { const k = 0.75; r = r + (45 - r) * k; g = g + (55 - g) * k; b = b + (85 - b) * k; al = Math.min(0.85, al + 0.3); }
     if (th.season === 3 && al < 0.1) { al = 0.08; r = 190; g = 210; b = 255; }
     if (this.flash > 0) { al = Math.max(0, al - this.flash * 0.6); }
     if (al < 0.02 && !this.lights.length) return;
@@ -713,15 +745,15 @@ export class Renderer {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     const dpr = this.dpr;
     if (wt === 'rain' || wt === 'storm') {
-      const n = wt === 'storm' ? 260 : 130;
+      const n = wt === 'storm' ? 420 : 220;
       while (this.rainDrops.length < n) this.rainDrops.push({ x: Math.random() * W, y: Math.random() * H, l: rnd(10, 22), v: rnd(700, 1000) });
-      ctx.strokeStyle = 'rgba(190,210,235,0.5)'; ctx.lineWidth = 1.2 * dpr; ctx.beginPath();
+      ctx.strokeStyle = wt === 'storm' ? 'rgba(200,220,245,0.7)' : 'rgba(200,218,240,0.55)'; ctx.lineWidth = 1.5 * dpr; ctx.beginPath();
       const wind = wt === 'storm' ? 0.4 : 0.15;
       for (const d of this.rainDrops) { d.y += d.v * dt * dpr; d.x -= d.v * dt * wind * dpr; if (d.y > H) { d.y = -20; d.x = Math.random() * (W + 200); } if (d.x < 0) d.x += W; ctx.moveTo(d.x, d.y); ctx.lineTo(d.x + d.l * wind * dpr, d.y - d.l * dpr); }
       ctx.stroke();
       if (wt === 'storm') {
         this.flash = Math.max(0, this.flash - dt * 3);
-        if (Math.random() < dt * 0.18) { this.flash = 1; }
+        if (Math.random() < dt * 0.12) { this.flash = 0.8; }
         if (this.flash > 0.01) { ctx.fillStyle = `rgba(235,240,255,${this.flash * 0.45})`; ctx.fillRect(0, 0, W, H); }
       }
     } else this.rainDrops.length = 0;

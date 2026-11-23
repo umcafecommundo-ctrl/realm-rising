@@ -123,13 +123,21 @@ function needsStep(s, p, dt, th, offline) {
   }
   // saúde
   let dh = 0, cause = null;
-  if (n.hunger <= 0) { dh -= 0.4; cause = 'morreu de fome'; }
-  if (s.res.water <= 0 && p.thirst) { dh -= 0.25; cause = cause || 'morreu de sede'; }
+  const harsh = offline ? 0.35 : 1; // ausente, o povo emigra antes de morrer (ver dailyTick)
+  if (n.hunger <= 0) { dh -= 0.4 * harsh; cause = 'morreu de fome'; }
+  if (s.res.water <= 0 && p.thirst) { dh -= 0.25 * harsh; cause = cause || 'morreu de sede'; }
   if (p.sick > 0) { dh -= 0.14; cause = cause || 'sucumbiu à doença'; }
   if (s._cold) { dh -= 0.1; cause = cause || 'morreu de frio'; }
   if (dh === 0 && n.hunger > 35) dh = 0.1;
   n.health = clamp(n.health + dh * dt, 0, 100);
-  if (n.health <= 0 && !p._dead) { p._dead = true; (s._toKill ||= []).push([p, cause || 'faleceu']); }
+  if (n.health <= 0 && !p._dead) {
+    // ausente: limite de mortes por privação (o resto foge em vez de morrer) — evita extinção total sem aviso
+    if (offline && s._offBudget !== undefined && (cause === 'morreu de fome' || cause === 'morreu de sede' || cause === 'morreu de frio')) {
+      if (s._offBudget <= 0) { n.health = 30; n.hunger = Math.max(n.hunger, 10); return; }
+      s._offBudget--;
+    }
+    p._dead = true; (s._toKill ||= []).push([p, cause || 'faleceu']);
+  }
   // alegria tende ao alvo global
   const target = (s._joyTarget ?? 60) + (hash2(p.id, 7) - 0.5) * 10 - (p.sick > 0 ? 15 : 0) - (n.hunger < 25 ? 15 : 0) - (n.sleep < 20 ? 8 : 0) + (p.hero ? 8 : 0);
   n.joy += (clamp(target, 0, 100) - n.joy) * Math.min(1, dt * 0.07);
@@ -250,18 +258,25 @@ export function techAvailable(s, id) {
 
 // ---------- Modo offline (modelo abstrato) ----------
 function consumeNodes(s, type, amt) {
-  // retira do nó mais próximo do centro; árvores derrubadas viram toco
+  // retira do nó mais próximo do centro; árvores derrubadas viram toco. A lista candidata é reaproveitada entre chamadas.
   const c = { x: CENTER.x, y: CENTER.y };
-  let left = amt, tries = 0;
-  const cand = s.nodes.filter(n => n.type === type && n.amt > 0.01 && (type !== 'tree' || n.st === 'alive') && Math.hypot(n.x - c.x, n.y - c.y) < eraRadius(s) + 3)
-    .sort((a, b) => Math.hypot(a.x - c.x, a.y - c.y) - Math.hypot(b.x - c.x, b.y - c.y));
-  for (const n of cand) {
-    if (left <= 0) break;
+  const pools = s._pools || (s._pools = {});
+  let pool = pools[type];
+  if (!pool || pool.idx >= pool.list.length || pool.stamp !== s._poolStamp) {
+    const R = eraRadius(s) + 3;
+    const list = s.nodes.filter(n => n.type === type && n.amt > 0.01 && (type !== 'tree' || n.st === 'alive') && Math.hypot(n.x - c.x, n.y - c.y) < R)
+      .sort((a, b) => Math.hypot(a.x - c.x, a.y - c.y) - Math.hypot(b.x - c.x, b.y - c.y));
+    pool = pools[type] = { list, idx: 0, stamp: s._poolStamp };
+  }
+  let left = amt;
+  while (left > 0 && pool.idx < pool.list.length) {
+    const n = pool.list[pool.idx];
+    if (n.amt <= 0.01 || (type === 'tree' && n.st !== 'alive')) { pool.idx++; continue; }
     const take = Math.min(n.amt, left);
     n.amt -= take; left -= take;
-    if (type === 'tree' && n.amt <= 0.01) { n.st = 'stump'; n.t = s.t + DAY_LEN * 7; }
+    if (n.amt <= 0.01) { if (type === 'tree') { n.st = 'stump'; n.t = s.t + DAY_LEN * 7; } pool.idx++; }
   }
-  return amt - left; // quanto realmente havia
+  return amt - left;
 }
 function offlineWork(s, dt, th) {
   const k = dt / DAY_LEN * OFFLINE_EFF;
@@ -368,7 +383,16 @@ function dailyTick(s, th, offline) {
     const sol = soldiersOf(s).length;
     if (sol < s._d.soldierCap) { const v = s.people.find(p => p.job === 'livre' && p.age >= ADULT_AGE) || s.people.find(p => p.age >= ADULT_AGE && p.job !== 'soldado' && p.job !== 'construtor'); if (v) { v.job = 'soldado'; s._dirty = true; } }
   }
+  // fome/sede prolongada: moradores abandonam o reino em busca de comida (sobretudo quando o jogador está ausente)
+  if ((s.res.food <= 0.5 || s.res.water <= 0.5) && s.people.length > 2 && (offline || chance(0.25))) {
+    const n = Math.min(s.people.length - 2, Math.max(1, Math.ceil(s.people.length * (offline ? 0.08 : 0.03))));
+    const names = [];
+    for (let i = 0; i < n; i++) { const v = pick(s.people.filter(p => p.age >= ADULT_AGE)); if (!v) break; s.people.splice(s.people.indexOf(v), 1); for (const q of s.people) if (q.partner === v.id) q.partner = null; names.push(v.name); s._left = (s._left || 0) + 1; }
+    if (names.length) { chron(s, `${names.join(', ')} abandonou(aram) o reino em busca de comida e água.`, 'bad'); if (!offline) toast(s, `${names.length} morador(es) fugiram da fome!`, 'bad', '🚪'); }
+    s._dirty = true;
+  }
   regrowNodes(s, th);
+  s._poolStamp = (s._poolStamp || 0) + 1;
   populationDaily(s, th, offline);
   // ferramentas e pesquisa
   worldDaily(s, offline);

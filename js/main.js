@@ -1,6 +1,6 @@
 // main.js — inicialização, laço principal, autosave e progresso offline
 
-import { newGame as mkGame, load, save, wipeSave, timeInfo, serialize } from './state.js';
+import { newGame as mkGame, load, save, wipeSave, timeInfo, serialize, migrate } from './state.js';
 import { tick, ensureRuntime } from './sim.js';
 import { simulateOffline } from './offline.js';
 import { Renderer } from './render.js';
@@ -21,8 +21,7 @@ const game = {
   importSave(text) {
     const s = JSON.parse(text);
     if (!s || s.v !== 1 || !s.people) throw new Error('inválido');
-    for (const p of s.people) p.rt = {};
-    s.toastQueue = [];
+    migrate(s);
     this.s = s; ensureRuntime(s); this.ui.reset(); this.tut.reset(); this.saveNow();
   },
   /** Auxiliar de depuração/testes: avança a simulação `sec` segundos de jogo (ao vivo). */
@@ -60,7 +59,8 @@ async function boot() {
   // laço principal
   let last = performance.now(), saveT = 0, hiddenAt = null;
   function frame(now) {
-    const dt = Math.min(0.1, (now - last) / 1000); last = now;
+    const raw = (now - last) / 1000; const dt = Math.min(0.1, raw); last = now;
+    if (raw < 0.5) game.r.perf(raw);
     const st = game.s;
     if (!game.booting || true) tick(st, dt);
     game.r.render(st, dt);

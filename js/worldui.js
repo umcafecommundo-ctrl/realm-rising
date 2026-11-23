@@ -236,7 +236,7 @@ export function runBattle(root, rep, done) {
       });
     };
     drawSide(left, aliveL, -1); drawSide(right, aliveR, 1);
-    for (const sp of sparks) { sp.t += 0.03; x.fillStyle = `rgba(255,230,140,${1 - sp.t})`; x.beginPath(); x.arc(sp.x + Math.sin(sp.t * 20) * 4, sp.y - sp.t * 30, 2.4 * (1 - sp.t), 0, 7); x.fill(); }
+    for (const sp of sparks) { sp.t += 0.03; if (sp.t >= 1) continue; x.fillStyle = `rgba(255,230,140,${1 - sp.t})`; x.beginPath(); x.arc(sp.x + Math.sin(sp.t * 20) * 4, sp.y - sp.t * 30, 2.4 * (1 - sp.t), 0, 7); x.fill(); }
     while (sparks.length && sparks[0].t > 1) sparks.shift();
     x.fillStyle = 'rgba(0,0,0,0.5)'; x.beginPath(); x.roundRect(w / 2 - 38, 6, 76, 20, 8); x.fill(); x.fillStyle = '#fff'; x.font = '700 12px system-ui'; x.textAlign = 'center'; x.fillText(r >= R ? 'Fim' : `Rodada ${r + 1}`, w / 2, 20);
     if (r >= R && el > (R + 0.6) * RT) { finish(); return; }

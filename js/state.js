@@ -81,7 +81,7 @@ export function makePerson(s, o = {}) {
     skill: {}, n: { hunger: 85, sleep: 90, joy: 65, health: 100 },
     x: o.x ?? CENTER.x * TILE, y: o.y ?? CENTER.y * TILE,
     home: null, partner: null, preg: null, lastBirth: -99, sick: 0, hero: false, away: 0,
-    look: { hair: pick(['#3b2a1a', '#5a3b1f', '#8a5a2b', '#c2933b', '#1f1a17', '#a1481f', '#d8d0c0']), skin: pick(['#f1c9a0', '#e0ac7c', '#c68a5c', '#a46a42', '#7b4a2d']), s: Math.random() },
+    look: { hair: pick(['#3b2a1a', '#5a3b1f', '#8a5a2b', '#c2933b', '#1f1a17', '#a1481f', '#6e4a2a']), skin: pick(['#f1c9a0', '#e0ac7c', '#c68a5c', '#a46a42', '#7b4a2d']), s: Math.random() },
     rt: {},
   };
   if (p.age >= 10) for (const j of ['lenhador', 'coletor', 'cacador', 'construtor', 'pedreiro']) p.skill[j] = Math.random() * 1.2;
@@ -223,9 +223,20 @@ export function load() {
     if (!raw) return null;
     const s = JSON.parse(raw);
     if (!s || s.v !== 1) return null;
-    for (const p of s.people) { p.rt = {}; if (p.away == null) p.away = 0; }
-    s.toastQueue = [];
-    return s;
+    return migrate(s);
   } catch (e) { console.warn('load failed', e); return null; }
+}
+/** Completa campos que saves antigos podem não ter (compatibilidade entre versões). */
+export function migrate(s) {
+  const d = newGame(s.seed);
+  for (const k of ['policies', 'stats', 'flags', 'festival', 'tech', 'quests', 'ev', 'weather']) s[k] = { ...d[k], ...(s[k] || {}) };
+  for (const k of ['achievements', 'rates']) s[k] = s[k] || {};
+  for (const k of ['threats', 'territories', 'chronicle', 'roads', 'toastQueue']) s[k] = s[k] || [];
+  s.army = s.army || { units: {}, queue: [] };
+  s.tut = s.tut || { step: 0, done: true };
+  s.bestPop = s.bestPop || s.people.length;
+  for (const p of s.people) { p.rt = {}; if (p.away == null) p.away = 0; p.skill = p.skill || {}; p.n = { hunger: 80, sleep: 80, joy: 60, health: 100, ...(p.n || {}) }; }
+  s.toastQueue = []; s.paused = false; // pausas de modal são transitórias
+  return s;
 }
 export function wipeSave() { try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* ignora */ } }

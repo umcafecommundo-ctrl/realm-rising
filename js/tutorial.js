@@ -91,20 +91,21 @@ export class Tutorial {
   }
   show(st, idx, total, nextBtn, label, isTip) {
     const ui = this.ui, r = ui.r;
-    let rect = null, wpos = null;
+    let rect = null, wpos = null, fromWorld = false;
     let sel = st.target;
     let el = sel && document.querySelector(sel);
     if ((!el || el.offsetParent === null) && st.fallback) el = document.querySelector(st.fallback);
     if (el && el.offsetParent !== null) rect = el.getBoundingClientRect();
     else if (st.world) {
       let p = st.world === 'ghost' ? (r.ghost && { x: (r.ghost.x + 1) * TILE, y: (r.ghost.y + 1) * TILE }) : st.world(ui.s);
-      if (p) { const sp = r.toScreen(p.x, p.y - 12); rect = { left: sp.x - 36, top: sp.y - 40, width: 72, height: 80, right: sp.x + 36, bottom: sp.y + 40 }; }
+      if (p) { fromWorld = true; const sp = r.toScreen(p.x, p.y - 12); rect = { left: sp.x - 36, top: sp.y - 40, width: 72, height: 80, right: sp.x + 36, bottom: sp.y + 40 }; }
       if (st.follow && st.world !== 'ghost' && p) r.following = (typeof st.world === 'function' ? st.world(ui.s) : null);
     }
     if (!st.follow && r.following && !ui.sel) r.following = null;
     const text = typeof st.text === 'function' ? st.text() : st.text;
     this.box.style.display = 'block';
-    this.box.innerHTML = `<b class="ttl">${st.title}</b>${text}<div class="tb"><span class="step">${isTip ? 'DICA' : `${idx + 1}/${total}`}</span><span>${isTip ? '' : '<button class="btn" data-t="skip">Pular</button> '}${nextBtn ? `<button class="btn pri" data-t="${isTip ? 'ok' : 'next'}">${label}</button>` : ''}</span></div>`;
+    const html = `<b class="ttl">${st.title}</b>${text}<div class="tb"><span class="step">${isTip ? 'DICA' : `${idx + 1}/${total}`}</span><span>${isTip ? '' : '<button class="btn" data-t="skip">Pular</button> '}${nextBtn ? `<button class="btn pri" data-t="${isTip ? 'ok' : 'next'}">${label}</button>` : ''}</span></div>`;
+    if (html !== this._boxHTML) { this._boxHTML = html; this.box.innerHTML = html; } // só reescreve quando muda (senão o clique se perde)
     const W = innerWidth, H = innerHeight, bw = this.box.offsetWidth, bh = this.box.offsetHeight;
     if (rect) {
       const pad = 6;
@@ -116,6 +117,7 @@ export class Tutorial {
       let left = Math.max(8, Math.min(W - bw - 8, rect.left + rect.width / 2 - bw / 2));
       // evita cobrir o alvo
       if (top < rect.bottom && top + bh > rect.top && Math.abs((rect.left + rect.width / 2) - (left + bw / 2)) < bw / 2) { top = below ? Math.min(H - bh - 8, rect.bottom + 12) : Math.max(8, rect.top - bh - 12); }
+      if (fromWorld) { left = Math.max(8, (W - bw) / 2); top = touch() ? 150 : H * 0.2; } // alvos móveis: caixa fixa (clicável)
       this.box.style.left = left + 'px'; this.box.style.top = top + 'px';
       this.arrow.style.display = 'block'; this.arrow.textContent = below ? '👆' : '👇';
       this.arrow.style.left = rect.left + rect.width / 2 - 14 + 'px'; this.arrow.style.top = (below ? rect.bottom + 2 : rect.top - 36) + 'px';

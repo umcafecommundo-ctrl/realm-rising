@@ -68,3 +68,12 @@ for (let t = 0; t < MIN * 60; t += 0.25) {
 }
 console.log(log.join('\n'));
 console.log('chronicle tail:\n' + s.chronicle.slice(-12).map(c => `  d${c.day} [${c.kind}] ${c.text}`).join('\n'));
+if (process.env.OFF) {
+  const { simulateOffline } = await import('../js/offline.js');
+  const rep = simulateOffline(s, +process.env.OFF * 3600);
+  console.log('OFFLINE', process.env.OFF + 'h', 'dias', rep.days.toFixed(1), 'pop', rep.before.pop, '->', rep.after.pop, 'era', rep.before.era, '->', rep.after.era, rep.verdict, 'mortes', rep.deaths, 'fugas', rep.left, 'nasc', rep.births, 'imig', rep.immigrants);
+  console.log(rep.lines.map(l => ' - ' + l.text).join('\n')); console.log(' recursos:', JSON.stringify(rep.dRes)); console.log(' eventos:', rep.events.map(e => e.title + '→' + e.choice).join('; '));
+}
+if (process.env.OFF) { const k = {}; for (const c of s.chronicle) if (c.kind === 'death') { const m = c.text.replace(/^.*? (morreu|sucumbiu|tombou|foi morto|faleceu|não resistiu)/, '$1'); k[m] = (k[m] || 0) + 1; } console.log('MORTES', JSON.stringify(k)); }
+console.log('BATALHAS', s.stats.battlesWon, s.stats.battlesLost, (s.battleLog || []).slice(-8).map(b => `${b.win ? 'V' : 'D'} ${b.title}: ${b.lines.join(' ')}`).join('\n  '));
+console.log('def', Math.round((await import('../js/core.js')).defensePower(s)), 'kingdoms', s.world ? s.world.kingdoms.map(k => `${k.name.split(' ')[0]} str${Math.round(k.str)} rel${Math.round(k.rel)} ${k.war ? 'WAR' : ''}${k.treaty.peace ? 'peace' : ''}`).join(' | ') : '-');
