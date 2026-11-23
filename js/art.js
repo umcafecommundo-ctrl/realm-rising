@@ -5,6 +5,18 @@ import { TILE } from './data.js';
 import { RNG, shade, mix, rgba, clamp, hash2 } from './util.js';
 
 export const SC = 2;
+
+// Polyfill de roundRect para navegadores mais antigos (Safari < 16 etc.)
+if (typeof CanvasRenderingContext2D !== 'undefined' && !CanvasRenderingContext2D.prototype.roundRect) {
+  CanvasRenderingContext2D.prototype.roundRect = function (x, y, w, h, r) {
+    const rr = Array.isArray(r) ? r : [r, r, r, r];
+    const [a, b, c, d] = rr.length === 4 ? rr : [rr[0], rr[0], rr[0], rr[0]];
+    this.moveTo(x + a, y); this.lineTo(x + w - b, y); this.quadraticCurveTo(x + w, y, x + w, y + b);
+    this.lineTo(x + w, y + h - c); this.quadraticCurveTo(x + w, y + h, x + w - c, y + h);
+    this.lineTo(x + d, y + h); this.quadraticCurveTo(x, y + h, x, y + h - d);
+    this.lineTo(x, y + a); this.quadraticCurveTo(x, y, x + a, y); this.closePath();
+  };
+}
 export function cv(w, h, scale = SC) {
   const c = document.createElement('canvas');
   c.width = Math.ceil(w * scale); c.height = Math.ceil(h * scale);

@@ -29,11 +29,11 @@ Também funciona publicado como site estático (GitHub Pages, Netlify, etc.): é
 |---|---|
 | **Eras** | Acampamento → Vila → Cidade → Reino → Império (cada uma libera construções, profissões e mecânicas; território cresce) |
 | **Recursos** | madeira, pedra, comida, água · tábuas, ferramentas, tecido, ferro · ouro, armas, joias — com **cadeias de produção** e **armazenamento limitado** |
-| **Povo** | nome, idade, fome/sono/humor/saúde, habilidade que cresce com o uso; casais, filhos, imigrantes, doenças, fugas; 11 profissões |
-| **Construções** | 25 tipos (fogueira, abrigo, casa, fazenda, poço, serraria, depósito, mercado, ferraria, mina, quartel, muralha, taverna, castelo, catedral, porto, academia, estrada, monumento, Grande Maravilha…) com **fundação → andaime → pronto** |
-| **Tecnologia** | árvore vertical de 18 pesquisas que liberam construções e dão bônus |
+| **Povo** | nome, idade, fome/sono/humor/saúde, habilidade que cresce com o uso; casais, filhos, imigrantes, doenças, fugas; 10 profissões + moradores livres |
+| **Construções** | 23 tipos (fogueira, abrigo, casa, fazenda, poço, serraria, depósito, mercado, ferraria, mina, quartel, muralha, taverna, castelo, catedral, porto, academia, estrada, monumento, Grande Maravilha…) com **fundação → andaime → pronto** |
+| **Tecnologia** | árvore vertical de 19 pesquisas que liberam construções e dão bônus |
 | **Políticas** | impostos, racionamento, trabalho extra, recrutamento obrigatório, fronteira, postura diplomática, festivais |
-| **Eventos** | 20 eventos com 2–3 opções (inverno rigoroso, praga, doença, incêndio, lobos, bandidos, mercador, refugiados, minério, rebelião, heróis…) |
+| **Eventos** | 21 eventos com 2–3 opções (inverno rigoroso, praga, doença, incêndio, lobos, bandidos, mercador, refugiados, minério, rebelião, heróis…) |
 | **Mundo** | mapa-múndi 16×12 com **névoa de guerra**, batedores, 4 reinos de IA (pacífico / agressivo / comerciante), diplomacia (presentes, paz, aliança, tributo), rotas comerciais com caravanas |
 | **Guerra** | 5 tipos de unidade com contra-ataques, treino no quartel, batalhas automáticas com **animação e relatório**, defesa (muralhas/castelo), conquista de territórios que rendem recursos |
 | **Offline** | até **12 h** de ausência (1 s offline = 0,2 s de jogo, 70% de eficiência). Ao voltar: **Relatório do Reino** (população, recursos, eventos resolvidos, batalhas, fome/frio/fugas, veredito) |
