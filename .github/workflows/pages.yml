@@ -4,32 +4,33 @@ on:
   push:
     branches: [main, claude/kingdom-idle-strategy-game-761lu4]
   workflow_dispatch:
-permissions:
-  contents: read
-  actions: read
-  pages: write
-  id-token: write
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
       - name: Monta o site
         run: |
           mkdir _site
           cp -r index.html css js _site/
-          touch _site/.nojekyll
       - uses: actions/configure-pages@v5
-        with:
-          enablement: true
-      - uses: actions/upload-pages-artifact@v4
+      - uses: actions/upload-pages-artifact@v3
         with:
           path: _site
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Aguarda o artefato ficar disponível
+        run: sleep 15
       - id: deployment
         uses: actions/deploy-pages@v4
