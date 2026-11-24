@@ -310,7 +310,7 @@ export function launchEnemyArmy(s, k, frac) {
 export function autoWorld(s) {
   const w = s.world; if (!w || !s.flags.worldUnlocked) return;
   // exploração: sempre um batedor ativo enquanto houver mapa a descobrir
-  if (w.scouts.length < 1 && s.res.food >= 40) {
+  if (w.scouts.length < 2 && s.res.food >= 30) {
     let best = null, bd = 1e9;
     for (const t of w.tiles) { if (t.rev || canScout(s, t.x, t.y)) continue; const d = Math.hypot(t.x - HOME.x, t.y - HOME.y); if (d < bd) { bd = d; best = t; } }
     if (best) sendScout(s, best.x, best.y);

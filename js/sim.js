@@ -5,7 +5,7 @@ import { DAY_LEN, YEAR_DAYS, SEASON_DAYS, TILE, MAP_W, MAP_H, BUILDINGS, RES, RE
 import { timeInfo, isNight, recalc, bdef, countB, techFx, hasTech, eraRadius, unlocked, jobUnlocked, CENTER, isWater, rebuildBlocked, makePerson } from './state.js';
 import { bus, addRes, spend, canAfford, chron, toast, floatText, adultsOf, dailyConsumption, foodDays, waterDays, avgJoy, killPerson, addPerson, defensePower, globalMult, personMult, gainSkill, soldiersOf, capOf } from './core.js';
 import { updatePerson, updateAnimals, eatNow, autoJob } from './ai.js';
-import { autoBuild, findSlot, tidyOne } from './planner.js';
+import { autoBuild, findSlot, tidyOne, eraDeficits } from './planner.js';
 import { rollEvent, resolveAuto, makeInstance } from './events.js';
 import { worldDaily, worldSlow, initWorld, autoWorld } from './world.js';
 import { warDaily, resolveThreat, trainTick, marchTick, autoMilitary, autoConquer } from './war.js';
@@ -201,8 +201,8 @@ function produce(s, dt, th, offline) {
     switch (b.type) {
       case 'farm': { const n = staffTot(b); if (n) { addRes(s, 'food', n * 18 * sm * farmSeason * (1 + techFx(s, 'farm')) * k); } break; }
       case 'well': addRes(s, 'water', (14 + staffN(b, 'coletor') * 8 * sm) * k * (s.weather.type === 'rain' ? 1.2 : 1) * (s.t < (s.flags.droughtUntil || 0) ? 0.4 : 1)); break;
-      case 'sawmill': { const n = staffTot(b); if (n && s.res.wood >= 16 && capOf(s, 'planks') > s.res.planks) { const make = Math.min(n * 8 * sm * k, (s.res.wood - 12) / 2); addRes(s, 'wood', -make * 2, { noStat: true }); addRes(s, 'planks', make); } break; }
-      case 'mine': { const n = staffTot(b); if (n) { if (s.flags.ore) addRes(s, 'iron', n * 5 * sm * k); else addRes(s, 'stone', n * 9 * sm * k); } break; }
+      case 'sawmill': { const n = staffTot(b); if (n && s.res.wood >= 16 && capOf(s, 'planks') > s.res.planks) { const make = Math.min(n * (s.flags.noSaw ? 8 : 12) * sm * k, (s.res.wood - 12) / 2); addRes(s, 'wood', -make * 2, { noStat: true }); addRes(s, 'planks', make); } break; }
+      case 'mine': { const n = staffTot(b); if (n) { if (s.flags.ore) { addRes(s, 'iron', n * 5 * sm * k); addRes(s, 'stone', n * 4 * sm * k); } else addRes(s, 'stone', n * 9 * sm * k); } break; }
       case 'smithy': {
         const n = staffTot(b); if (!n) break;
         if (b.mode === 'tools') { const make = Math.min(n * 4 * sm * k, s.res.iron, s.res.wood / 2); if (make > 0) { addRes(s, 'iron', -make, { noStat: true }); addRes(s, 'wood', -make * 2, { noStat: true }); addRes(s, 'tools', make); } }
@@ -237,7 +237,7 @@ export function pickTech(s) {
     for (const id of next.req.tech || []) targets.push(id);
     for (const type of Object.keys(next.req.buildings || {})) { const tg = BUILDINGS[type].tech; if (tg) targets.push(tg); }
   }
-  for (const id of ['agriculture', 'cartography', 'masonry', 'sanitation', 'commerce', 'metallurgy', 'military', 'writing']) targets.push(id);
+  for (const id of ['cartography', 'agriculture', 'masonry', 'sanitation', 'commerce', 'metallurgy', 'military', 'writing']) targets.push(id);
   const chain = id => { // primeira pesquisa disponível no caminho até id
     if (!TECHS[id] || s.tech.done[id]) return null;
     if (techAvailable(s, id)) return id;
@@ -751,7 +751,13 @@ export function autoAssign(s, maxChanges = 3) {
   if (slots.ferreiro) T.ferreiro = slots.ferreiro;
   if (slots.comerciante) T.comerciante = slots.comerciante;
   if (d0.soldierCap && jobUnlocked(s, 'soldado') && (s.threats.length || s.era >= 4 || (s.world?.kingdoms || []).some(k => k.known && k.pers === 'agressivo'))) T.soldado = Math.min(d0.soldierCap, Math.ceil(N * 0.1));
-  if (crit) { delete T.pedreiro; T.lenhador = Math.min(T.lenhador || 0, slots.lenhador || 0); if (sites) T.construtor = 1; }
+  // foco na próxima era: recursos que faltam para evoluir ganham trabalhadores
+  const defs = eraDeficits(s), focus = { wood: 'lenhador', planks: 'lenhador', stone: 'pedreiro', iron: 'pedreiro', gold: 'comerciante' };
+  const focusJobs = {};
+  for (const r in defs) { const j = focus[r]; if (!j || !jobUnlocked(s, j)) continue; const share = Math.min(0.4, 0.15 + 0.25 * Math.min(1, defs[r].deficit / Math.max(1, defs[r].target))); focusJobs[j] = Math.max(focusJobs[j] || 0, share); }
+  if (s.flags.noFocus) for (const j in focusJobs) delete focusJobs[j];
+  for (const j in focusJobs) T[j] = Math.max(T[j] || 0, Math.ceil(N * focusJobs[j]));
+  if (crit) { delete T.pedreiro; if (focusJobs.pedreiro) T.pedreiro = Math.max(1, Math.ceil(N * 0.15)); T.lenhador = Math.min(T.lenhador || 0, slots.lenhador || 0); if (sites) T.construtor = 1; }
   const want = {}; let left = pool.length;
   const give = (j, n) => { if (!ok(j) || n <= 0 || left <= 0) return; const k = Math.min(n, left); want[j] = (want[j] || 0) + k; left -= k; };
   const prio = ['coletor', 'agricultor', 'construtor', 'cacador', 'lenhador', 'pedreiro', 'ferreiro', 'comerciante'];
@@ -763,8 +769,8 @@ export function autoAssign(s, maxChanges = 3) {
   const need = {
     coletor: Math.max(0.15, 1 - Math.min(wd, fd) / 14, lack('food') * 0.6, lack('water') * 0.6),
     agricultor: slots.agricultor ? Math.max(0.2, 1 - fd / 14) : 0,
-    lenhador: Math.max(0.2, lack('wood') + (winterSoon ? 0.35 : 0), s.era >= 2 ? lack('planks') * 0.4 : 0),
-    pedreiro: Math.max(0.15, lack('stone')),
+    lenhador: Math.max(0.2, lack('wood') + (winterSoon ? 0.35 : 0), s.era >= 2 ? lack('planks') * 0.4 : 0, (focusJobs.lenhador || 0) * 2),
+    pedreiro: Math.max(0.15, lack('stone'), (focusJobs.pedreiro || 0) * 2),
     cacador: N >= 5 ? Math.max(0.05, (1 - fd / 14) * (th.season === 3 ? 1 : 0.4)) : 0,
     construtor: sites ? 0.9 : (N >= 6 ? 0.12 : 0),
   };

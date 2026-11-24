@@ -119,13 +119,16 @@ function autoBuildOnce(s) {
   L.push([era >= 2 ? 'house' : 'shelter', calm && d.beds < pop + 2 && pop + 2 <= foodCap * 1.15, true]);
   // o que falta para evoluir de era
   if (st) for (const [type, n] of Object.entries(ERAS[era + 1].req.buildings || {})) L.push([type, have(type) < n, 2]);
+  const defs = eraDeficits(s);
+  const capShort = Object.keys(defs).some(r => defs[r].target > capOf(s, r) * 0.98);   // o custo da era nem cabe no armazém
   const winterCap = capOf(s, 'food') < pop * SEASON_DAYS * 1.1 && pop >= 8; // estoque de comida não cobre um inverno
-  L.push([era >= 2 ? 'storehouse' : 'gatherpoint', (winterCap && storageN < 10) || (!saving && full && storageN < 1 + pop / 14), winterCap]);
+  L.push([era >= 2 ? 'storehouse' : 'gatherpoint', (winterCap && storageN < 10) || (capShort && storageN < 12) || (!saving && full && storageN < 1 + pop / 14), winterCap]);
   if (era >= 2) {
     L.push(['farm', (have('farm') < Math.ceil(pop / 7) + (pop >= 16 ? 1 : 0) && (fd < 20 || rate('food') < 0)) || pop + 4 > foodCap, true]);
     L.push(['well', have('well') < Math.max(1, Math.ceil(pop / 20)) && (wd < 14 || rate('water') < 0), true]);
-    L.push(['sawmill', !saving && pop >= 10 && !have('sawmill'), false]);
+    L.push(['sawmill', (!saving && pop >= 10 && !have('sawmill')) || (!s.flags.noSaw && defs.planks && pop >= 14 && have('sawmill') < Math.min(4, 1 + Math.ceil(defs.planks.deficit / 150))), defs.planks ? 2 : false]);
   }
+  if (era >= 3 && defs.stone && s.res.stone < 40 && !have('mine')) L.push(['mine', true, 2]);   // pedra escassa: mina fornece pedra
   if (era >= 3) {
     L.push(['market', !saving && pop >= 18 && !have('market'), false]);
     L.push(['tavern', !saving && (pop >= 20 || avgJoy(s) < 55) && !have('tavern'), false]);
@@ -217,4 +220,17 @@ export function reorganizeAll(s) {
     if (moveBuilding(s, b, slot[0], slot[1], false, false)) { n++; chron(s, `${def.name} foi reorganizado(a) para o ${zoneOf(b.type).name.toLowerCase()}.`, 'build'); }
   }
   return n;
+}
+
+/** O que falta (por recurso) para a próxima era: custo da era + prédios exigidos ainda não construídos. */
+export function eraDeficits(s) {
+  const next = ERAS[s.era + 1]; if (!next) return {};
+  const target = { ...next.cost };
+  for (const [type, n] of Object.entries(next.req.buildings || {})) {
+    const miss = Math.max(0, n - s.buildings.filter(b => b.type === type).length);
+    if (miss && unlocked(s, type)) for (const r in BUILDINGS[type].cost) target[r] = (target[r] || 0) + BUILDINGS[type].cost[r] * miss;
+  }
+  const out = {};
+  for (const r in target) { const d = target[r] - s.res[r]; if (d > 0 && r !== 'food' && r !== 'water') out[r] = { deficit: d, target: target[r] }; }
+  return out;
 }
