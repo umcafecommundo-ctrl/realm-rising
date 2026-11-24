@@ -114,6 +114,7 @@ function updateWeather(s, th) {
 // ---------- Necessidades ----------
 function needsStep(s, p, dt, th, offline) {
   const n = p.n;
+  if (p.away > 0) { n.hunger = Math.max(n.hunger, 30); n.sleep = Math.max(n.sleep, 40); return; }   // em missão: leva provisões, não passa fome
   const child = p.age < ADULT_AGE;
   n.hunger = Math.max(0, n.hunger - dt * 0.7 * (s.policies.ration ? 0.7 : 1) * (child ? 0.7 : 1));
   if (offline) {
@@ -353,7 +354,7 @@ function regrowNodes(s, th) {
       else if (n.st === 'sapling' && s.t >= n.t) { n.st = 'alive'; n.amt = n.max; }
     } else if (n.type === 'bush') {
       if (th.season !== 3 && n.amt < n.max) n.amt = Math.min(n.max, n.amt + (th.season === 0 ? 0.7 : 1.2));
-    } else if (n.type === 'rock' && n.amt < n.max) { n.amt = Math.min(n.max, Math.max(0, n.amt) + 0.8); }
+    } else if (n.type === 'rock' && n.amt < n.max) { n.amt = Math.min(n.max, Math.max(0, n.amt) + 1.3); }
   }
   s.nodes = s.nodes.filter(n => !n._gone && !(n.type === 'tree' && n.st === 'removed'));
 }
@@ -367,6 +368,7 @@ function completeBuildings(s) {
     s.stats.built[b.type] = (s.stats.built[b.type] || 0) + 1;
     const def = BUILDINGS[b.type];
     if (!def.repeat) { chron(s, `${def.name} concluído(a).`, 'build'); toast(s, `${def.name} pronto!`, 'good', def.icon); }
+    if (b.type === 'mine' && !s.flags.ore) { s.flags.ore = true; chron(s, 'Os mineiros encontraram um rico veio de ferro!', 'good'); }
     bus.emit('built', b);
     s._dirty = true;
   }

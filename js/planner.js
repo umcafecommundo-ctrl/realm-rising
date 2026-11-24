@@ -108,6 +108,23 @@ function autoBuildOnce(s) {
       if (upgradeBuilding(s, b)) { (s._autoBuilt ||= []).push(`${BUILDINGS[info.to].name} (evolução)`); return b; }
     }
   }
+  // depósito junto às pedras: encurta a viagem dos pedreiros (a causa mais comum de pedra "parada")
+  if (!s.buildings.some(b => b.type === 'gatherpoint' && b.pinned && !b.done) && (s.res.stone < capOf(s, 'stone') * 0.35 || (eraDeficits(s).stone))) {
+    const rocks = s.nodes.filter(n => n.type === 'rock' && n.amt > 1 && Math.hypot(n.x - CENTER.x, n.y - CENTER.y) < eraRadius(s) + 3).sort((a, b) => Math.hypot(a.x - CENTER.x, a.y - CENTER.y) - Math.hypot(b.x - CENTER.x, b.y - CENTER.y));
+    const far = rocks.filter(n => Math.hypot(n.x - CENTER.x, n.y - CENTER.y) > 9);
+    const rk = far[0];
+    const depotNear = rk && s.buildings.some(b => (b.type === 'gatherpoint' || b.type === 'storehouse') && b.done && Math.hypot(b.x + b.w / 2 - rk.x, b.y + b.h / 2 - rk.y) < 8);
+    if (rk && !depotNear && affordSafely(s, BUILDINGS.gatherpoint.cost, 0.9, 0.3)) {
+      let spot = null, bd = 1e9;
+      for (let dy = -6; dy <= 6; dy++) for (let dx = -7; dx <= 7; dx++) {
+        const x = Math.floor(rk.x) + dx, y = Math.floor(rk.y) + dy;
+        const d = Math.hypot(dx, dy); if (d < 2.5 || d >= bd) continue;
+        if (footprintOk(s, 'gatherpoint', x, y) || !clearOf(s, null, x, y, 3, 2, 0)) continue;
+        bd = d; spot = [x, y];
+      }
+      if (spot) { const b = placeBuilding(s, 'gatherpoint', spot[0], spot[1]); if (b) { b.pinned = true; chron(s, 'Um depósito foi erguido junto às pedreiras para acelerar a mineração.', 'build'); (s._autoBuilt ||= []).push('Área de Coleta (pedreira)'); return b; } }
+    }
+  }
   const st = eraStatus(s);
   const saving = !!st && st.reqOk && !st.costOk;   // só falta juntar recursos: não gasta em extras
   const L = [];   // [tipo, condição, relaxado?]
@@ -128,7 +145,7 @@ function autoBuildOnce(s) {
     L.push(['well', have('well') < Math.max(1, Math.ceil(pop / 20)) && (wd < 14 || rate('water') < 0), true]);
     L.push(['sawmill', (!saving && pop >= 10 && !have('sawmill')) || (!s.flags.noSaw && defs.planks && pop >= 14 && have('sawmill') < Math.min(4, 1 + Math.ceil(defs.planks.deficit / 150))), defs.planks ? 2 : false]);
   }
-  if (era >= 3 && defs.stone && s.res.stone < 40 && !have('mine')) L.push(['mine', true, 2]);   // pedra escassa: mina fornece pedra
+  if (era >= 3 && ((defs.stone && s.res.stone < 40) || defs.iron) && !have('mine')) L.push(['mine', true, 2]);   // pedra/ferro em falta: mina   // pedra escassa: mina fornece pedra
   if (era >= 3) {
     L.push(['market', !saving && pop >= 18 && !have('market'), false]);
     L.push(['tavern', !saving && (pop >= 20 || avgJoy(s) < 55) && !have('tavern'), false]);

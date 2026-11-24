@@ -35,7 +35,7 @@ export function genNodes(seed, terrain) {
   for (const [rx, ry, n] of rockSpots) for (let i = 0; i < n * 2; i++) {
     const x = Math.floor(rx + rng.range(-3.5, 3.5)), y = Math.floor(ry + rng.range(-3, 3));
     if (x < 1 || y < 1 || x >= MAP_W - 1 || y >= MAP_H - 1 || terrain.water[key(x, y)] || taken.has(key(x, y))) continue;
-    add('rock', x + 0.5, y + 0.5, { amt: 14, max: 14, v: rng.int(0, 2) });
+    add('rock', x + 0.5, y + 0.5, { amt: 20, max: 20, v: rng.int(0, 2) });
   }
   // Veio de minério (oculto até ser descoberto)
   for (const [ox, oy] of [[14, 33], [45, 38], [19, 20]]) if (!taken.has(key(ox, oy)))

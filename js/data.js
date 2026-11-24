@@ -48,8 +48,8 @@ export const JOBS = {
 };
 export const JOB_ORDER = Object.keys(JOBS);
 // Taxa de produção por trabalhador (por dia de jogo, habilidade 1.0) em tarefas ao ar livre
-export const OUT_RATE = { lenhador: 26, coletor: 14, cacador: 15, pedreiro: 17, water: 18 };
-export const CARRY = { wood: 4, stone: 3, food: 4, water: 4 };
+export const OUT_RATE = { lenhador: 30, coletor: 14, cacador: 15, pedreiro: 34, water: 18 };
+export const CARRY = { wood: 6, stone: 6, food: 5, water: 5 };
 
 // ---------- Construções ----------
 // cost: custo, work: unidades de trabalho de obra, beds: camas, storage: capacidade extra, slots: vagas de trabalho
