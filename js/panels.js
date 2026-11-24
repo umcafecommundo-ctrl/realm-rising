@@ -4,9 +4,11 @@ import { BUILDINGS, BUILD_CATS, RES, JOBS, JOB_ORDER, TECHS, ERAS, POLICIES, FES
 import { iconURL } from './art.js';
 import { buildingSprite } from './art_b.js';
 import { unlocked, hasTech, jobUnlocked, countB, timeInfo } from './state.js';
-import { jobCounts, techAvailable, festivalReady, reputation, repCost, techDef } from './sim.js';
+import { jobCounts, techAvailable, festivalReady, reputation, repCost, techDef, leaderOf, faithTier } from './sim.js';
 import { avgJoy, foodDays, dailyConsumption, defensePower, capOf } from './core.js';
 import { ACHIEVEMENTS } from './quests.js';
+import { weeklyList } from './weekly.js';
+import { FAITHS, FAITH_STEP, TRAITS } from './data.js';
 import { fmt, fmt1 } from './util.js';
 
 export const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -72,6 +74,8 @@ export function peoplePanel(s, ui) {
     <div class="stat"><small>Crianças</small><b>${kids}</b></div><div class="stat"><small>Felicidade</small><b>${Math.round(avgJoy(s))}</b></div>
     <div class="stat"><small>Reputação</small><b>${Math.round(reputation(s))}</b></div><div class="stat"><small>Doentes</small><b class="${sick ? 'n' : ''}">${sick}</b></div></div>
     <div class="help" style="margin-bottom:8px">Barras: 🟠 fome · 🔵 sono · 🟡 humor · 🟢 saúde. Imigrantes chegam quando há camas livres, comida e boa reputação.</div>`;
+  const ld = leaderOf(s);
+  if (ld) h = `<div class="row" data-act="sel:person:${ld.id}" style="cursor:pointer;border:1px solid rgba(242,193,78,.5)"><span style="font-size:24px">👑</span><div class="grow"><div class="nm">${esc(ld.name)} — Líder do reino (${s.dynasty.gen}ª geração)</div><div class="sub">${(ld.traits || []).map(x => TRAITS[x].icon + ' ' + TRAITS[x].name).join(' · ')}</div></div></div>` + h;
   const list = [...s.people].sort((a, b) => (b.age >= ADULT_AGE) - (a.age >= ADULT_AGE) || a.name.localeCompare(b.name));
   for (const p of list) {
     const j = JOBS[p.job];
@@ -116,6 +120,13 @@ export function policyPanel(s, ui) {
       h += `<div class="row" style="flex-wrap:wrap;${locked ? 'opacity:.4' : ''}"><span style="font-size:22px">${p.icon}</span><div class="grow"><div class="nm">${p.name}</div><div class="sub">${p.desc[v]}</div></div>
         <div class="seg" style="width:100%">${p.options.map((o, i) => `<button class="${i === v ? 'on' : ''} ${locked ? 'lockd' : ''}" data-act="pol:${k}:${i}">${o}</button>`).join('')}</div>${locked ? `<div class="sub" style="width:100%">Disponível na era ${ERAS[p.era].name}</div>` : ''}</div>`;
     }
+  }
+  {
+    const hasTemple = s.buildings.some(b => (b.type === 'temple' || b.type === 'cathedral') && b.done);
+    const f = s.faith, tier = faithTier(s);
+    h += `<div class="sec">Fé</div>` + (!hasTemple && !f.id ? '<div class="help">Construa um <b>Templo</b> (era Cidade) para adotar uma fé. Templos e catedrais geram pontos de fé; a cada dogma o bônus cresce 50%. Reinos da mesma fé gostam mais de você.</div>' :
+      `<div class="row" style="flex-wrap:wrap"><div class="grow"><div class="nm">${f.id ? FAITHS[f.id].icon + ' ' + FAITHS[f.id].name : 'Nenhuma fé adotada'}</div><div class="sub">${f.id ? `Dogma ${tier}/3 · ${Math.floor(f.pts)} pontos (${FAITH_STEP} por dogma)` : 'Escolha uma fé:'}</div></div></div>
+      <div class="pills">${Object.entries(FAITHS).map(([id, ff]) => `<button class="pill ${f.id === id ? 'on' : ''}" data-act="faith:${id}" data-tip="${ff.desc}${f.id && f.id !== id ? '<br>Trocar custa 100 ouro e metade dos pontos.' : ''}">${ff.icon} ${ff.name}</button>`).join('')}</div>`);
   }
   const left = Math.max(0, s.festival.until - s.t), cd = Math.max(0, s.festival.cooldownUntil - s.t);
   h += `<div class="sec">Festival</div><div class="row"><span style="font-size:22px">🎉</span><div class="grow"><div class="nm">Festival do Reino</div><div class="sub">+${FESTIVAL.joy} felicidade por ${FESTIVAL.days} dias. Custa ${FESTIVAL.cost.food} comida e ${FESTIVAL.cost.water} água.</div>
@@ -163,6 +174,8 @@ export function chroniclePanel(s, ui) {
 }
 export function achievementsPanel(s) {
   const n = Object.keys(s.achievements).length;
-  return { title: `🏆 Conquistas (${n}/${ACHIEVEMENTS.length})`, help: 'Conquistas marcam seus feitos. Algumas pedem sobrevivência, outras guerra ou diplomacia.',
-    html: ACHIEVEMENTS.map(a => { const got = s.achievements[a.id]; return `<div class="achv ${got ? '' : 'lock'}"><span class="ic">${a.icon}</span><div><b>${a.name}</b><small>${a.desc}${got ? ` · Dia ${got}` : ''}</small></div></div>`; }).join('') };
+  const wk = weeklyList(s);
+  const wkH = wk.length ? `<div class="sec">📅 Desafios da semana (+1 Legado cada)</div>` + wk.map(g => `<div class="goal" style="padding:6px 0"><div class="t"><span>${g.done ? '✅ ' : ''}${esc(g.text)}</span><i>${g.cur}/${g.target}</i></div><div class="bar"><span style="width:${g.cur / g.target * 100}%"></span></div></div>`).join('') + `<div class="sec">Conquistas</div>` : '';
+  return { title: `🏆 Conquistas (${n}/${ACHIEVEMENTS.length})`, help: 'Conquistas marcam seus feitos. Os desafios da semana mudam toda semana e dão Legado permanente.',
+    html: wkH + ACHIEVEMENTS.map(a => { const got = s.achievements[a.id]; return `<div class="achv ${got ? '' : 'lock'}"><span class="ic">${a.icon}</span><div><b>${a.name}</b><small>${a.desc}${got ? ` · Dia ${got}` : ''}</small></div></div>`; }).join('') };
 }

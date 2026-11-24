@@ -100,6 +100,8 @@ export const BUILDINGS = {
     desc: 'Glória eterna do império: grande prestígio.' },
   wonder:    { name: 'Grande Maravilha', icon: '🌟', era: 5, w: 5, h: 5, cost: { planks: 300, stone: 500, gold: 600, jewels: 30 }, work: 900, cat: 'Império', tech: 'monumental', unique: true, prestige: 120, happy: 10, light: 220,
     desc: 'A obra final de um grande império. Completá-la é a glória suprema.' },
+  temple:    { name: 'Templo', icon: '⛩️', era: 3, w: 3, h: 3, cost: { planks: 30, stone: 50 }, work: 60, cat: 'Realeza', happy: 4, prestige: 4, light: 100, art: 'monument',
+    desc: 'Casa de oração: gera pontos de fé (dogmas fortalecem a fé escolhida) e +4 felicidade.' },
   // ---- evoluções (tier 2/3): mesma pegada do prédio base, melhores atributos ----
   stonehouse: { name: 'Casa de Pedra', icon: '🏡', era: 3, w: 3, h: 2, cost: { wood: 20, stone: 30, planks: 10 }, work: 40, cat: 'Moradia', beds: 6, light: 80, tech: 'architecture', as: 'house', tier: 2, upgrade: { to: 'manor', frac: 0.6 },
     desc: 'Evolução da casa: paredes de pedra e telhas. Acomoda 6 pessoas.' },
@@ -212,5 +214,23 @@ export const POLICIES = {
   border: { name: 'Fronteira', era: 1, options: ['Aberta', 'Fechada'], icon: '🚪', desc: ['Imigrantes são bem-vindos (mais moradores).', 'Sem imigrantes e sem refugiados.'] },
   stance: { name: 'Postura Diplomática', era: 3, options: ['Conciliadora', 'Orgulhosa'], icon: '🕊️',
     desc: ['Paga tributos para evitar guerra (usado quando você está ausente).', 'Recusa exigências: mais respeito, mais risco de ataque.'] },
+};
+// ---------- Fés ----------
+export const FAITHS = {
+  sol: { name: 'Culto do Sol', icon: '☀️', fx: { joy: 3 }, desc: '+3 felicidade (aumenta com os dogmas).' },
+  natureza: { name: 'Caminho da Natureza', icon: '🌿', fx: { farm: 0.12, disease: -0.15 }, desc: '+12% colheita e menos doenças.' },
+  guerra: { name: 'Ordem da Guerra', icon: '⚔️', fx: { defense: 0.15 }, desc: '+15% de defesa.' },
+  saber: { name: 'Luz do Saber', icon: '📜', fx: { rp: 0.15 }, desc: '+15% de pesquisa.' },
+};
+export const FAITH_STEP = 150; // pontos de fé por dogma (nível 1–3; cada nível +50% do bônus)
+
+// ---------- Líder / dinastia: traços ----------
+export const TRAITS = {
+  sabio: { name: 'Sábio', icon: '📖', fx: { rp: 0.1 } },
+  guerreiro: { name: 'Guerreiro', icon: '⚔️', fx: { defense: 0.1 } },
+  mercador: { name: 'Mercador', icon: '💰', fx: { trade: 0.1 } },
+  construtor: { name: 'Construtor', icon: '🔨', fx: { build: 0.1 } },
+  provedor: { name: 'Provedor', icon: '🌾', fx: { farm: 0.1, gather: 0.03 } },
+  carismatico: { name: 'Carismático', icon: '😊', fx: { joy: 3 } },
 };
 export const FESTIVAL = { cost: { food: 30, water: 10 }, goldCost: 0, days: 2, joy: 20, cooldown: 8 };

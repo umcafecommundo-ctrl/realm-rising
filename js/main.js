@@ -9,12 +9,15 @@ import { Tutorial } from './tutorial.js';
 import { bus } from './core.js';
 import { OFFLINE_MAX } from './data.js';
 import { reorganizeAll } from './planner.js';
+import { Sound, bindSound } from './audio.js';
+import { recordRun } from './share.js';
 
 const game = {
   s: null, r: null, ui: null, tut: null, booting: true,
   saveNow() { if (this.s) save(this.s); },
   /** Ascensão: reinicia o reino mantendo o Legado acumulado (bônus permanentes). */
   ascend() {
+    recordRun(this.s);
     const gain = legacyGain(this.s), total = (this.s.legacy || 0) + gain;
     wipeSave(); this.s = mkGame(undefined, total); ensureRuntime(this.s);
     this.ui.reset(); this.r.parts = []; this.r.floats = []; this.r.focus(32 * 32, 26 * 32, 1.4);
@@ -51,6 +54,7 @@ async function boot() {
   const mobile = innerWidth < 760;
   game.r.focus(32 * 32, 26 * 32 + 10, mobile ? 1.15 : 1.5);
   game.ui = new UI(game);
+  bindSound(() => game.r.view);
   game.tut = new Tutorial(game.ui);
 
   // progresso offline
@@ -67,7 +71,7 @@ async function boot() {
   }, 450);
 
   // laço principal
-  let last = performance.now(), saveT = 0, hiddenAt = null;
+  let last = performance.now(), saveT = 0, hiddenAt = null, rankT = 0;
   function frame(now) {
     const raw = (now - last) / 1000; const dt = Math.min(0.1, raw); last = now;
     if (raw < 0.5) game.r.perf(raw);
@@ -76,9 +80,10 @@ async function boot() {
     game.r.render(st, dt);
     game.r.lastDt = dt;
     game.ui.update(dt);
+    if (!st.paused || true) Sound.update(st, st._th || timeInfo(st), dt, game.r.view);
     game.tut.update(dt);
     saveT += dt;
-    if (saveT > 5) { saveT = 0; save(st); }
+    if (saveT > 5) { saveT = 0; save(st); if ((rankT += 5) >= 60) { rankT = 0; recordRun(st); } }
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);

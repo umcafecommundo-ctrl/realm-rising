@@ -3,6 +3,7 @@
 
 import { DAY_LEN, BUILDINGS, RES, ADULT_AGE, SEASON_DAYS, YEAR_DAYS } from './data.js';
 import { timeInfo, countB, techFx } from './state.js';
+import { leaderOf, setLeader } from './sim.js';
 import { addRes, canAfford, spend, chron, toast, killSome, addPerson, avgJoy, foodDays, defensePower, soldiersOf, adultsOf, costStr, capOf, killPerson, bus } from './core.js';
 import { clamp, rnd, rint, chance, pick } from './util.js';
 import { fairPower } from './war.js';
@@ -198,6 +199,40 @@ export const EVENTS = {
       { label: 'Reparar com tábuas/madeira', hint: 'Custa 12 madeira.', need: { wood: 12 }, fx: s => { spend(s, { wood: 12 }); return 'Os reparos são feitos rapidamente.'; } },
       { label: 'Deixar para depois', hint: 'Perde 8 madeira e 3 pedra; felicidade -3.', fx: s => { pct(s, 'wood', 0.1); pct(s, 'stone', 0.05); for (const p of s.people) p.n.joy -= 3; return 'Goteiras e frio aborrecem o povo.'; } },
     ], auto: s => (s.res.wood >= 25 ? 0 : 1),
+  },
+  // ----- Dinastia / desastres -----
+  succession: {
+    title: 'Disputa pelo trono', icon: '👑', era: [1, 6], weight: () => 0, cd: 0,
+    text: s => 'O líder do reino se foi sem herdeiro direto. Facções disputam o poder: os anciões querem o mais capaz, o povo quer uma eleição.',
+    options: [
+      { label: 'Nomear o mais capaz', hint: 'O morador de maior habilidade assume.', fx: s => { const a = s.people.filter(p => p.age >= 14); const p = a.sort((x, y) => Math.max(0, ...Object.values(y.skill || {})) - Math.max(0, ...Object.values(x.skill || {})))[0]; if (p) setLeader(s, p, 'nomeado pelos anciões'); return 'Os anciões coroam o mais capaz.'; } },
+      { label: 'Eleição popular', hint: '+6 felicidade; o mais querido assume.', fx: s => { const a = s.people.filter(p => p.age >= 14); const p = a.sort((x, y) => y.n.joy - x.n.joy)[0]; if (p) setLeader(s, p, 'eleito pelo povo'); for (const q of s.people) q.n.joy = Math.min(100, q.n.joy + 6); return 'O povo vai às urnas e escolhe seu líder.'; } },
+    ], auto: () => 0,
+  },
+  earthquake: {
+    title: 'Terremoto', icon: '🌋', era: [4, 6], weight: s => (s.buildings.length >= 15 ? 2 : 0), cd: 40,
+    text: s => 'O chão treme com violência. Muros racham e telhados desabam por todo o reino.',
+    options: [
+      { label: 'Escorar tudo com pedra', hint: 'Custa 60 pedra. Quase nenhuma perda.', need: { stone: 60 }, fx: s => { spend(s, { stone: 60 }); return 'As estruturas escoradas resistem ao tremor.'; } },
+      { label: 'Reconstruir depois', hint: 'Perde 1–2 construções.', fx: s => { const n = chance(0.5) ? 2 : 1; let lost = []; for (let i = 0; i < n; i++) { const b = damageRandomBuilding(s, true); if (b) lost.push(BUILDINGS[b.type].name); } return lost.length ? `Desabaram: ${lost.join(', ')}.` : 'Por sorte nada de importante caiu.'; } },
+    ], auto: s => (s.res.stone >= 100 ? 0 : 1),
+  },
+  horde: {
+    title: 'Horda bárbara', icon: '🪓', era: [5, 6], weight: s => (s.people.length >= 60 ? 3 : 0), cd: 30,
+    gen: s => ({ pay: { gold: 300 + s.era * 80 } }),
+    text: (s, p) => 'Uma enorme horda se junta além das fronteiras e marcha para o reino. Eles não negociam como os outros reinos — mas aceitam ouro para recuar.',
+    options: [
+      { label: 'Pagar para recuarem', hint: (s, p) => `Custa ${costStr(p.pay)}.`, need: (s, p) => p.pay, fx: (s, p) => { spend(s, p.pay); return 'A horda leva o ouro e desaparece nas montanhas.'; } },
+      { label: 'Resistir nas muralhas', hint: 'Combate real: força muito acima do normal.', fx: s => { pushThreat(s, 'army', Math.round(defensePower(s) * 1.35 + s.era * 12), 'Horda Bárbara', 1.4); return 'Os sinos soam: todos às armas!'; } },
+    ], auto: (s, p) => (canAfford(s, p.pay) ? 0 : 1),
+  },
+  great_famine: {
+    title: 'Grande Fome', icon: '🥀', era: [3, 6], weight: s => (s.people.length >= 25 ? 2 : 0), cd: 45,
+    text: s => 'Uma terrível ferrugem apodrece os celeiros. Metade dos grãos estocados se perde.',
+    options: [
+      { label: 'Importar grãos', hint: 'Custa 200 ouro: +120 comida.', need: { gold: 200 }, fx: s => { spend(s, { gold: 200 }); pct(s, 'food', 0.2); addRes(s, 'food', 120); return 'Caravanas trazem grãos de longe. A fome é contida.'; } },
+      { label: 'Apertar o cinto', hint: 'Perde 45% da comida e ativa racionamento.', fx: s => { pct(s, 'food', 0.45); s.policies.ration = true; return 'O povo aperta o cinto. Racionamento decretado.'; } },
+    ], auto: s => (s.res.gold >= 400 ? 0 : 1),
   },
   // ----- Eras avançadas -----
   comet: {

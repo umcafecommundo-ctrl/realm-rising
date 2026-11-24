@@ -1,6 +1,6 @@
 // worldui.js — interface do mapa-múndi, diplomacia, comércio, exército e visualizador de batalhas
 
-import { DAY_LEN, RES, UNITS, TECHS } from './data.js';
+import { DAY_LEN, RES, UNITS, TECHS, FAITHS } from './data.js';
 import { WW, WH, HOME, tileAt, kingdomById, PERS, diploActions, doDiplo, canScout, sendScout, travelDays, dist } from './world.js';
 import { unitCounts, armyPower, canTrain, trainEnqueue, recruitsFree, attackInfo, launchAttack, UT } from './war.js';
 import { defensePower, soldiersOf, toast, bus } from './core.js';
@@ -70,7 +70,7 @@ export class WorldUI {
     // pontos de interesse
     for (const t of w.tiles) {
       if (!t.rev || !t.poi || t.owner === 'player') continue;
-      const ic = { camp: '⛺', iron: '⛏️', fertile: '🌾', lumber: '🪵', quarry: '🪨', ruins: t.poi.looted ? '🏚️' : '🏛️', gold: '🪙' }[t.poi.type];
+      const ic = { camp: '⛺', iron: '⛏️', fertile: '🌾', lumber: '🪵', quarry: '🪨', ruins: t.poi.looted ? '🏚️' : '🏛️', gold: '🪙', island: t.poi.looted ? '🏝️' : '💎' }[t.poi.type];
       x.font = `${T * 0.5}px serif`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(ic, (t.x + 0.5) * T, (t.y + 0.55) * T);
     }
     for (const tr of s.territories) { x.font = `${T * 0.5}px serif`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('🚩', (tr.x + 0.5) * T, (tr.y + 0.55) * T); }
@@ -79,7 +79,7 @@ export class WorldUI {
     // viajantes: batedores, caravanas e marchas
     const dot = (px, py, col, ic) => { x.fillStyle = col; x.beginPath(); x.arc(px, py, T * 0.15, 0, 7); x.fill(); x.font = `${T * 0.34}px serif`; x.fillText(ic, px, py - T * 0.28); };
     for (const sc of w.scouts) { const f = Math.min(1, (s.t - (sc.arrive - travelDays(sc.x, sc.y) * DAY_LEN)) / (travelDays(sc.x, sc.y) * DAY_LEN)); const g = sc.done ? 1 - Math.min(1, (s.t - sc.arrive) / (sc.back - sc.arrive)) : f; dot(((HOME.x + (sc.x - HOME.x) * g) + 0.5) * T, ((HOME.y + (sc.y - HOME.y) * g) + 0.5) * T, '#fff', '🧭'); }
-    for (const ca of w.caravans) { const k = kingdomById(s, ca.k); const g = Math.min(1, (s.t - ca.sent) / (ca.at - ca.sent)); dot(((k.cap.x + (HOME.x - k.cap.x) * g) + 0.5) * T, ((k.cap.y + (HOME.y - k.cap.y) * g) + 0.5) * T, '#e0a82e', '🐪'); }
+    for (const ca of w.caravans) { const k = kingdomById(s, ca.k); const g = Math.min(1, (s.t - ca.sent) / (ca.at - ca.sent)); dot(((k.cap.x + (HOME.x - k.cap.x) * g) + 0.5) * T, ((k.cap.y + (HOME.y - k.cap.y) * g) + 0.5) * T, '#e0a82e', ca.get.ship ? '⛵' : '🐪'); }
     for (const m of w.marches) { const d = (m.arrive - m.depart); const g = m.returning ? 1 - Math.min(1, (s.t - m.arrive) / Math.max(1, m.back - m.arrive)) : Math.min(1, (s.t - m.depart) / d); dot(((HOME.x + (m.tx - HOME.x) * g) + 0.5) * T, ((HOME.y + (m.ty - HOME.y) * g) + 0.5) * T, '#e85a4a', '⚔️'); }
     if (this.sel) { x.strokeStyle = '#fff'; x.lineWidth = 3; x.setLineDash([6, 4]); x.lineDashOffset = -now * 12; x.strokeRect(this.sel.x * T + 2, this.sel.y * T + 2, T - 4, T - 4); x.setLineDash([]); }
   }
@@ -127,7 +127,7 @@ export class WorldUI {
       const ratio = k.str / Math.max(5, mine);
       const cmp = ratio > 1.3 ? '<span class="tag r">Mais forte</span>' : ratio < 0.7 ? '<span class="tag g">Mais fraco</span>' : '<span class="tag y">Equilibrado</span>';
       h += `<div class="krow" style="border-color:${k.color}"><div class="kh"><b>${k.name}</b><span>${tags}</span></div>
-        <div class="sub">${PERS[k.pers].icon} ${PERS[k.pers].name} · ${k.ruler} · ${cmp} <span style="color:#a9b5a3">(força ≈ ${Math.round(k.str)})</span></div>
+        <div class="sub">${PERS[k.pers].icon} ${PERS[k.pers].name} · ${FAITHS[k.faith]?.icon || ''} ${FAITHS[k.faith]?.name || ''} · ${k.ruler} · ${cmp} <span style="color:#a9b5a3">(força ≈ ${Math.round(k.str)})</span></div>
         <div class="relbar"><i style="left:${(rel + 100) / 2}%"></i></div><div class="sub">Relação: ${rel > 40 ? 'amistosa' : rel > 0 ? 'cordial' : rel > -40 ? 'fria' : 'hostil'} (${rel})</div>
         <div class="acts">${diploActions(s, k).map(a => `<button class="btn ${a.danger ? 'bad' : ''} ${a.ok ? '' : 'dis'}" data-tip="${a.hint}" data-w="diplo:${k.id}:${a.id}">${a.label}</button>`).join('')}</div></div>`;
     }

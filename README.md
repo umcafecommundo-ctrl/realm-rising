@@ -35,6 +35,14 @@ https://umcafecommundo-ctrl.github.io/realm-rising/ (publicado pelo workflow `.g
   * **9 novas tecnologias** e a pesquisa infinita **♾️ Aperfeiçoamento Contínuo** (+3% coleta/colheita/pesquisa por nível).
   * **Legado / Ascensão:** com uma maravilha construída, Menu → 🌟 Ascender reinicia o reino mantendo bônus permanentes (+4% por ponto, recursos e pesquisas iniciais).
   * Novos eventos (cometa, casamento real, Grande Peste), 10 novas missões e 7 conquistas.
+* **Extras de longo prazo:**
+  * **Som e música procedurais** (WebAudio, sem arquivos): machado, martelo, picareta, queda de árvore, fanfarra de era, chuva/vento/fogueira, pássaros de dia, grilos à noite e música generativa por estação. Botão 🔊 no topo e chaves no Menu.
+  * **Mapa-múndi maior** (24×16) com 6 reinos de IA, mais pontos de interesse e **4 ilhas** alcançáveis por **navios** (Porto + Navegação); caravanas por mar rendem +40%.
+  * **Religião:** Templo (era Cidade) gera pontos de fé; escolha entre 4 fés com bônus que crescem a cada dogma (3 níveis); reinos de mesma fé gostam mais de você.
+  * **Dinastia:** o reino tem um **Líder 👑** com traços (Sábio, Guerreiro, Mercador…) que dão bônus; ao morrer, herdeiros assumem (ou há disputa pelo trono, um evento com escolha).
+  * **Desastres de fim de jogo:** terremotos, Grande Fome e **hordas bárbaras** (força acima do normal, sem "ataques justos").
+  * **Desafios da semana:** 3 metas por semana real que dão +1 de Legado cada.
+  * **Compartilhar:** gera um cartão PNG do reino (mapa + estatísticas); **Ranking local** dos melhores reinos.
 * **Evoluir e mover construções:** selecione uma construção e use **⬆ Evoluir** (abrigo → casa, área de coleta → depósito; o conselho também faz isso sozinho com o excedente) e **✥ Mover** (qualquer prédio; custa 25% se já pronto, e a posição fica 📌 fixada). **📐 Organizar reino agora** (aba Construir) leva tudo para os distritos; o conselho também reorganiza 1 prédio por dia.
 * **Quando você está offline:** o conselho constrói o que o reino precisa (moradia, depósitos, fazendas, poço, serraria, mercado…) usando só o excedente e mantendo reservas; as obras são posicionadas em **distritos organizados** (residencial a oeste, agrícola ao norte, industrial a leste, cívico ao sul, real a noroeste, militar a sudeste) e obras suas fora do distrito são **realocadas** (grátis em obra; 25% do custo se prontas). Política "Construção automática" liga/desliga.
 * **Save seguro:** salva a cada 5 s, após cada interação e ao sair, com cópia de segurança; o relatório offline fica guardado até você lê-lo.

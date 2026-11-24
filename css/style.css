@@ -35,7 +35,7 @@ button { font: inherit; color: inherit; cursor: pointer; border: 0; background: 
 #speed { display: flex; border-radius: 12px; overflow: hidden; border: 1px solid var(--line); background: var(--glass); }
 #speed button { padding: 8px 9px; font-weight: 800; font-size: 12px; min-width: 34px; color: var(--mut); }
 #speed button.on { background: var(--gold); color: #3a2a08; }
-#btn-menu { width: 38px; height: 38px; border-radius: 12px; background: var(--glass); border: 1px solid var(--line); font-size: 18px; }
+#btn-menu, #btn-sound { width: 38px; height: 38px; border-radius: 12px; background: var(--glass); border: 1px solid var(--line); font-size: 18px; }
 
 /* ---------- Esquerda: objetivos / alertas ---------- */
 #left { position: absolute; left: 10px; top: calc(62px + var(--safe-t)); width: 290px; display: flex; flex-direction: column; gap: 8px; z-index: 5; max-height: calc(100% - 150px); pointer-events: none; }
@@ -207,7 +207,7 @@ button { font: inherit; color: inherit; cursor: pointer; border: 0; background: 
   .goal .rw { display: none; } #left.expanded .goal .rw { display: block; }
   #sheet { top: auto; left: 6px; right: 6px; width: auto; bottom: calc(70px + var(--safe-b)); height: 58vh; border-radius: 20px 20px 16px 16px; }
   #tabs { gap: 2px; padding: 4px; } .tab { min-width: 42px; padding: 5px 3px; font-size: 9px; } .tab .ic { font-size: 19px; }
-  #date { min-width: 74px; padding: 4px 6px; font-size: 11px; } #speed button { padding: 8px 6px; min-width: 28px; } #btn-menu { width: 34px; height: 34px; }
+  #date { min-width: 74px; padding: 4px 6px; font-size: 11px; } #speed button { padding: 8px 6px; min-width: 28px; } #btn-menu, #btn-sound { width: 34px; height: 34px; }
   .grid { grid-template-columns: 1fr; }
   #inspector, #buildbar { bottom: calc(76px + var(--safe-b)); }
   .chip img { width: 22px; height: 22px; } .chip { padding: 3px 8px 3px 4px; font-size: 12px; }

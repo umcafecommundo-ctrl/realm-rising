@@ -9,7 +9,7 @@ import { chron, foodDays, waterDays, avgJoy, capOf, adultsOf } from './core.js';
 // Distritos: ângulo central (graus, 0 = leste, 90 = sul), abertura, faixa de raio (em tiles) e tipos
 export const ZONES = {
   res: { name: 'Bairro residencial', ang: 180, spread: 55, rmin: 5, rmax: 15, types: ['shelter', 'house', 'stonehouse', 'manor'] },
-  civic: { name: 'Centro cívico', ang: 90, spread: 60, rmin: 4, rmax: 11, types: ['market', 'tavern', 'storehouse', 'gatherpoint', 'well', 'loom', 'warehouse', 'cistern', 'bazaar', 'inn'] },
+  civic: { name: 'Centro cívico', ang: 90, spread: 60, rmin: 4, rmax: 11, types: ['market', 'tavern', 'storehouse', 'gatherpoint', 'well', 'loom', 'warehouse', 'cistern', 'bazaar', 'inn', 'temple'] },
   ind: { name: 'Distrito industrial', ang: 0, spread: 55, rmin: 6, rmax: 15, types: ['sawmill', 'smithy', 'mine', 'jeweler', 'sawmill2', 'foundry'] },
   farm: { name: 'Zona agrícola', ang: -90, spread: 60, rmin: 7, rmax: 18, types: ['farm', 'irrfarm'] },
   grand: { name: 'Distrito real', ang: -135, spread: 45, rmin: 8, rmax: 18, types: ['castle', 'cathedral', 'academy', 'monument', 'wonder', 'library', 'colossus', 'gardens', 'observatory', 'palace'] },

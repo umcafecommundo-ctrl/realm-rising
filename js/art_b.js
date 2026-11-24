@@ -428,16 +428,16 @@ const DRAW = {
 /** Sprite da construção pronta. Retorna { c, w, h, ox, oy (posição da base no sprite), lights, smoke, fire } */
 export function buildingSprite(type, season) {
   const def = BUILDINGS[type];
-  if (def.as) { // evolução: sprite do prédio base + distintivo dourado (estrelas por nível) e brilho nos tier 3
+  if (def.as || def.art) { // evolução / arte emprestada: sprite do prédio base + distintivo dourado (estrelas por nível) e brilho nos tier 3
     const key2 = type + '_t_' + season;
     if (cache[key2]) return cache[key2];
-    const base = buildingSprite(def.as, season);
+    const base = buildingSprite(def.as || def.art, season);
     const [c, x] = cv(base.w, base.h);
     if (def.tier >= 3) { x.fillStyle = rg(x, base.w / 2, base.h - 10, 4, base.w * 0.6, [[0, 'rgba(255,225,120,0.45)'], [1, 'rgba(255,225,120,0)']]); x.fillRect(0, 0, base.w, base.h); }
     x.drawImage(base.c, 0, 0, base.w, base.h);
     // tonalidade nobre sutil + estrelas
     x.globalCompositeOperation = 'source-atop'; x.fillStyle = def.tier >= 3 ? 'rgba(255,215,90,0.10)' : 'rgba(120,170,255,0.08)'; x.fillRect(0, 0, base.w, base.h); x.globalCompositeOperation = 'source-over';
-    for (let i = 0; i < def.tier; i++) { const sx = base.w - 12 - i * 11, sy = 10; poly(x, Array.from({ length: 10 }, (_, k) => { const a = -Math.PI / 2 + k * Math.PI / 5, r = k % 2 ? 2.6 : 5.4; return [sx + Math.cos(a) * r, sy + Math.sin(a) * r]; }), '#ffd84a', '#8a5a00', 0.7); }
+    for (let i = 0; i < (def.tier || 0); i++) { const sx = base.w - 12 - i * 11, sy = 10; poly(x, Array.from({ length: 10 }, (_, k) => { const a = -Math.PI / 2 + k * Math.PI / 5, r = k % 2 ? 2.6 : 5.4; return [sx + Math.cos(a) * r, sy + Math.sin(a) * r]; }), '#ffd84a', '#8a5a00', 0.7); }
     return (cache[key2] = { ...base, c });
   }
   const key = type + '_' + (['farm', 'house', 'shelter'].includes(type) || def.slots || def.era >= 4 || type === 'storehouse' || type === 'mine' || type === 'well' ? season : 0);

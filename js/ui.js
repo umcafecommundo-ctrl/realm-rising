@@ -3,12 +3,14 @@
 import { RES, RES_ORDER, BUILDINGS, JOBS, ERAS, SEASONS, SEASON_ICON, TILE, POLICIES, DAY_LEN, TECHS, ADULT_AGE, UNITS } from './data.js';
 import { timeInfo, jobUnlocked, unlocked, countB, hasTech, serialize, bdef } from './state.js';
 import { bus, capOf, avgJoy, foodDays, costStr, canAfford } from './core.js';
-import { canAscend, legacyGain, wondersBuilt, canPlace, placeBuilding, moveCheck, moveBuilding, upgradeInfo, upgradeBuilding, adjustJob, setPolicy, startResearch, startFestival, eraStatus, advanceEra, getAlerts, demolish, setJob, jobCounts } from './sim.js';
+import { chooseFaith, canAscend, legacyGain, wondersBuilt, canPlace, placeBuilding, moveCheck, moveBuilding, upgradeInfo, upgradeBuilding, adjustJob, setPolicy, startResearch, startFestival, eraStatus, advanceEra, getAlerts, demolish, setJob, jobCounts } from './sim.js';
 import { eventView, chooseOption } from './events.js';
 import { activeQuests, longGoal, QUESTS } from './quests.js';
 import { iconURL } from './art.js';
 import { buildPanel, peoplePanel, jobsPanel, policyPanel, techPanel, chroniclePanel, achievementsPanel, esc, rimg, costHTML, taskText, needsMini, ageText } from './panels.js';
 import { reorganizeAll } from './planner.js';
+import { Sound } from './audio.js';
+import { shareCard, getRanking, recordRun, scoreOf } from './share.js';
 import { WorldUI, battleHTML, runBattle } from './worldui.js';
 import { fmt, fmt1, fmtDur } from './util.js';
 
@@ -35,6 +37,9 @@ export class UI {
     $('tabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (b) this.togglePanel(b.dataset.tab); });
     for (const b of document.querySelectorAll('#speed button')) b.addEventListener('click', () => this.setSpeed(+b.dataset.speed));
     $('btn-menu').addEventListener('click', () => this.showMenu());
+    const upSnd = () => { $('btn-sound').textContent = Sound.sfx || Sound.music ? '🔊' : '🔇'; };
+    $('btn-sound').addEventListener('click', () => { Sound.start(); const on = Sound.sfx || Sound.music; Sound.setSfx(!on); Sound.setMusic(!on); upSnd(); });
+    upSnd();
     $('sheet').addEventListener('click', e => this.sheetClick(e));
     $('inspector').addEventListener('click', e => this.inspectorClick(e));
     $('buildbar').addEventListener('click', e => this.buildbarClick(e));
@@ -253,6 +258,7 @@ export class UI {
       case 'sel': { this.select({ kind: b, id: +c }, true); if (window.innerWidth <= 760) this.closePanel(); return; }
       case 'festival': if (!startFestival(s)) this.toast('Festival indisponível agora.', 'bad', '🎉'); break;
       case 'chr': this.chrFilter = b; break;
+      case 'faith': if (!chooseFaith(s, b)) this.toast('Troca de fé custa 100 de ouro.', 'bad', '🙏'); break;
       case 'organize': { const n = reorganizeAll(s); this.toast(n ? `${n} construção(ões) reorganizada(s) em distritos` : 'Tudo já está organizado (ou faltam recursos para mudar)', n ? 'good' : 'info', '📐'); break; }
     }
     this.lastPanelHTML = ''; this.refreshPanel();
@@ -509,6 +515,9 @@ export class UI {
       <button class="opt" data-m="export"><b>📤 Exportar save</b><small>Copia seu progresso para a área de transferência.</small></button>
       <button class="opt" data-m="import"><b>📥 Importar save</b><small>Cole um save exportado anteriormente.</small></button>
       ${canAscend(this.s) ? `<button class="opt" data-m="ascend"><b style="color:#f2c14e">🌟 Ascender (Legado +${legacyGain(this.s)})</b><small>Reinicia o reino mantendo bônus permanentes (+4% coleta, colheita e obra por ponto, recursos e pesquisas iniciais).</small></button>` : ''}
+      <button class="opt" data-m="share"><b>📸 Compartilhar meu reino</b><small>Gera uma imagem do mapa com suas estatísticas (compartilha ou baixa).</small></button>
+      <button class="opt" data-m="rank"><b>🏆 Ranking de reinos</b><small>Seus melhores reinos neste aparelho. Pontuação atual: ${scoreOf(this.s)}.</small></button>
+      <div class="seg" style="margin:6px 0"><button class="${Sound.sfx ? 'on' : ''}" data-m="sfx">🔊 Efeitos</button><button class="${Sound.music ? 'on' : ''}" data-m="mus">🎵 Música</button></div>
       <button class="opt" data-m="tut"><b>🎓 Rever tutorial</b><small>Reinicia as dicas guiadas.</small></button>
       <button class="opt" data-m="help"><b>❓ Como jogar</b><small>Controles e dicas rápidas.</small></button>
       <button class="opt" data-m="new"><b style="color:#ff9b8a">🗑️ Novo jogo</b><small>Apaga o progresso atual.</small></button>
@@ -521,10 +530,21 @@ export class UI {
       else if (m === 'export') { const t = serialize(this.s); navigator.clipboard?.writeText(t).then(() => this.toast('Save copiado!', 'good', '📤'), () => this.promptText('Copie o save:', t)); }
       else if (m === 'import') { this.closeModal(); const t = prompt('Cole aqui o save exportado:'); if (t) { try { g.importSave(t); this.toast('Save importado!', 'good', '📥'); } catch (err) { this.toast('Save inválido.', 'bad', '⚠️'); } } }
       else if (m === 'ascend') { if (confirm(`Ascender agora? Seu reino atual será encerrado e você ganha +${legacyGain(this.s)} de Legado (total ${(this.s.legacy || 0) + legacyGain(this.s)}).`)) { this.closeModal(); g.ascend(); } }
+      else if (m === 'share') { shareCard(this.s).then(r => this.toast(r === 'download' ? 'Imagem baixada!' : r === 'shared' ? 'Compartilhado!' : 'Cancelado', 'good', '📸')); }
+      else if (m === 'rank') { this.closeModal(); recordRun(this.s); this.showRanking(); }
+      else if (m === 'sfx') { Sound.start(); Sound.setSfx(!Sound.sfx); b.classList.toggle('on', Sound.sfx); document.getElementById('btn-sound').textContent = Sound.sfx || Sound.music ? '🔊' : '🔇'; }
+      else if (m === 'mus') { Sound.start(); Sound.setMusic(!Sound.music); b.classList.toggle('on', Sound.music); document.getElementById('btn-sound').textContent = Sound.sfx || Sound.music ? '🔊' : '🔇'; }
       else if (m === 'tut') { this.closeModal(); g.restartTutorial(); }
       else if (m === 'help') { this.closeModal(); this.showHowTo(); }
       else if (m === 'new') { if (confirm('Apagar todo o progresso e começar de novo?')) { this.closeModal(); g.newGame(); } }
     });
+  }
+  showRanking() {
+    const r = getRanking();
+    const html = `<div class="modal"><h2><span class="big">🏆</span>Ranking de reinos</h2><p style="margin-top:2px">Pontuação = população, eras, territórios, maravilhas, Legado e conquistas. Salvo só neste aparelho.</p>
+      ${r.length ? r.map((x, i) => `<div class="row"><span style="font-size:20px;min-width:26px">${['🥇', '🥈', '🥉'][i] || i + 1}</span><div class="grow"><div class="nm">${esc(x.name)}</div><div class="sub">Era ${ERAS[x.era]?.name} · ${x.pop} moradores · ${x.days} dias · Legado ${x.legacy}</div></div><b style="font-size:16px;color:#f2c14e">${x.score}</b></div>`).join('') : '<p>Ainda sem registros.</p>'}
+      <button class="btn pri" data-done style="width:100%;margin-top:10px">Fechar</button></div>`;
+    const el = this.openModal(html, {}); el.querySelector('[data-done]').addEventListener('click', () => this.closeModal());
   }
   promptText(msg, t) { prompt(msg, t); }
   showHowTo() {

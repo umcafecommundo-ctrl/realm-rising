@@ -1,6 +1,6 @@
 // state.js — criação do jogo, geração do mapa, derivados (capacidade, camas), save/load
 
-import { DAY_LEN, YEAR_DAYS, SEASON_DAYS, MAP_W, MAP_H, TILE, RES, RES_ORDER, BUILDINGS, BASE_CAP, ERAS, TECHS, JOBS } from './data.js';
+import { FAITHS, FAITH_STEP, TRAITS, DAY_LEN, YEAR_DAYS, SEASON_DAYS, MAP_W, MAP_H, TILE, RES, RES_ORDER, BUILDINGS, BASE_CAP, ERAS, TECHS, JOBS } from './data.js';
 import { RNG, fbm, hash2, randName, pick, rnd, clamp } from './util.js';
 
 export const SAVE_KEY = 'realm-rising-save-v1';
@@ -89,11 +89,13 @@ export function makePerson(s, o = {}) {
 }
 
 // ---------- Novo jogo ----------
+const KN_A = ['Aure', 'Val', 'Mor', 'Ever', 'Sol', 'Thal', 'Bel', 'Dun', 'Ras', 'Isen', 'Lor', 'Kar'], KN_B = ['wood', 'mere', 'haven', 'dor', 'stead', 'vale', 'gard', 'holm', 'ria', 'fell'];
+export function kingdomName(seed) { const r = new RNG(seed ^ 0x9e37); return 'Reino de ' + r.pick(KN_A) + r.pick(KN_B); }
 export function newGame(seed = (Math.random() * 1e9) | 0, legacy = 0) {
   const terrain = genTerrain(seed);
   const { nodes, nextId } = genNodes(seed, terrain);
   const s = {
-    v: 1, seed, created: Date.now(), lastSaved: Date.now(), legacy,
+    v: 1, seed, created: Date.now(), lastSaved: Date.now(), legacy, name: kingdomName(seed), faith: { id: null, pts: 0 }, dynasty: { leaderId: null, gen: 0, wait: null, hist: [] }, weekly: null,
     t: DAY_LEN * 0.3, era: 1, speed: 1, paused: false,
     res: { wood: 6, stone: 0, food: 18, water: 14, planks: 0, tools: 0, cloth: 0, iron: 0, gold: 0, weapons: 0, jewels: 0 },
     nodes, nextNid: nextId, nextPid: 1, nextBid: 1,
@@ -160,6 +162,9 @@ function computeFx(s) {
   for (const id in s.tech.done) add(TECHS[id]?.fx);
   for (const b of s.buildings) if (b.done) add(BUILDINGS[b.type].fx);
   add(REP_FX, s.tech.rep || 0); add(LEG_FX, s.legacy || 0);
+  if (s.faith?.id) add(FAITHS[s.faith.id].fx, 1 + 0.5 * Math.min(3, Math.floor((s.faith.pts || 0) / FAITH_STEP)));
+  const ld = s.dynasty?.leaderId && s.people.find(p => p.id === s.dynasty.leaderId);
+  if (ld) for (const tr of ld.traits || []) add(TRAITS[tr]?.fx);
   return fx;
 }
 /** Soma de bônus (tecnologias, maravilhas, pesquisas repetíveis e Legado). Em cache até a próxima recalc(). */
@@ -266,7 +271,7 @@ export function migrate(s) {
   for (const k of ['policies', 'stats', 'flags', 'festival', 'tech', 'quests', 'ev', 'weather']) s[k] = { ...d[k], ...(s[k] || {}) };
   for (const k of ['achievements', 'rates']) s[k] = s[k] || {};
   for (const k of ['threats', 'territories', 'chronicle', 'roads', 'toastQueue']) s[k] = s[k] || [];
-  s.legacy = s.legacy || 0; s.tech.rep = s.tech.rep || 0;
+  s.legacy = s.legacy || 0; s.tech.rep = s.tech.rep || 0; s.name = s.name || kingdomName(s.seed); s.faith = s.faith || { id: null, pts: 0 }; s.dynasty = s.dynasty || { leaderId: null, gen: 0, wait: null, hist: [] }; s.weekly = s.weekly || null;
   s.army = s.army || { units: {}, queue: [] };
   s.pendingReports = s.pendingReports || [];
   s.tut = s.tut || { step: 0, done: true };

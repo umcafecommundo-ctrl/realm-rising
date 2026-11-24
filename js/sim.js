@@ -10,6 +10,8 @@ import { rollEvent, resolveAuto, makeInstance } from './events.js';
 import { worldDaily, worldSlow, initWorld, autoWorld } from './world.js';
 import { warDaily, resolveThreat, trainTick, marchTick, autoMilitary, autoConquer } from './war.js';
 import { checkQuests, checkAchievements } from './quests.js';
+import { ensureWeekly, checkWeekly } from './weekly.js';
+import { FAITHS, TRAITS, FAITH_STEP } from './data.js';
 import { clamp, rnd, rint, chance, pick, hash2, randName } from './util.js';
 
 // ---------- Atualização principal ----------
@@ -215,6 +217,8 @@ function produce(s, dt, th, offline) {
       case 'tavern': { if (s.res.food >= 1 || staffTot(b) === 0) { addRes(s, 'food', -2 * k, { noStat: true }); b._open = true; } else b._open = false; addRes(s, 'gold', staffTot(b) * 3 * sm * k * (b._open ? 1 : 0)); break; }
       case 'port': addRes(s, 'food', (6 + staffN(b, 'coletor') * 10 * sm) * k); addRes(s, 'gold', staffN(b, 'comerciante') * 6 * sm * k * (1 + techFx(s, 'trade'))); break;
       case 'academy': rp += staffTot(b) * 3 * sm * k; break;
+      case 'temple': if (s.faith) s.faith.pts += 3 * k; break;
+      case 'cathedral': if (s.faith) s.faith.pts += 4 * k; break;
       case 'jeweler': { const n = staffTot(b); if (n) { const make = Math.min(n * 1.5 * sm * k, s.res.gold / 4, s.res.stone / 2); if (make > 0) { addRes(s, 'gold', -make * 4, { noStat: true }); addRes(s, 'stone', -make * 2, { noStat: true }); addRes(s, 'jewels', make); } } break; }
     }
   }
@@ -432,6 +436,7 @@ function dailyTick(s, th, offline) {
   s._poolStamp = (s._poolStamp || 0) + 1;
   populationDaily(s, th, offline);
   // ferramentas e pesquisa
+  ensureLeader(s, offline); autoFaith(s); ensureWeekly(s); checkWeekly(s);
   autoBuild(s); tidyOne(s); autoMilitary(s); autoPolicies(s, offline);
   if (s.policies.autoWorld) { autoWorld(s); autoConquer(s); }
   if (s.policies.autoEra && eraStatus(s)?.ready) advanceEra(s);
@@ -451,6 +456,56 @@ function dailyTick(s, th, offline) {
   if (!offline && th.dOfSeason === 0) { chron(s, `Chegou ${['a primavera', 'o verão', 'o outono', 'o inverno'][th.season]}. Ano ${th.year + 1}.`, 'season'); bus.emit('season', th.season); }
   if (offline && th.dOfSeason === 0) s._offSeasons = (s._offSeasons || 0) + 1;
   s._dirty = true;
+}
+
+// ---------- Fé ----------
+export function chooseFaith(s, id) {
+  if (!FAITHS[id]) return false;
+  if (s.faith.id && s.faith.id !== id) { if (s.res.gold < 100) return false; s.res.gold -= 100; s.faith.pts = Math.floor(s.faith.pts / 2); }
+  s.faith.id = id; s._dirty = true; chron(s, `O reino adotou a fé: ${FAITHS[id].name}.`, 'policy'); return true;
+}
+function autoFaith(s) {
+  if (s.faith.id || !s.policies.autoEvents || !countB(s, 'temple')) return;
+  const id = (s.rates.food || 0) < 0 ? 'natureza' : s.threats.length || s.era >= 4 ? 'guerra' : s.era >= 3 ? 'saber' : 'sol';
+  chooseFaith(s, id);
+}
+export const faithTier = s => Math.min(3, Math.floor((s.faith?.pts || 0) / FAITH_STEP));
+
+// ---------- Dinastia ----------
+export function leaderOf(s) { return s.dynasty?.leaderId ? s.people.find(p => p.id === s.dynasty.leaderId) : null; }
+export function setLeader(s, p, why = '') {
+  const d = s.dynasty; const old = leaderOf(s); if (old) old.leader = false;
+  d.leaderId = p.id; d.gen = (d.gen || 0) + 1; d.wait = null; p.leader = true;
+  if (!p.traits || !p.traits.length) { const ks = Object.keys(TRAITS); p.traits = [ks[(p.id * 7) % ks.length], ks[(p.id * 3 + 2) % ks.length]].filter((v, i, a) => a.indexOf(v) === i); }
+  d.hist.push({ name: p.name, gen: d.gen, day: timeInfo(s).day });
+  chron(s, `${p.name} assume a liderança do reino (${d.gen}ª geração${why ? ', ' + why : ''}). Traços: ${p.traits.map(x => TRAITS[x].name).join(', ')}.`, 'era');
+  s._dirty = true;
+}
+function bestHeir(s, old) {
+  const adults = s.people.filter(p => p.age >= 14 && !p.away && p.age < 65);
+  if (!adults.length) return null;
+  const score = p => Math.max(0, ...Object.values(p.skill || {})) + p.n.joy / 40;
+  const kids = old ? adults.filter(p => p.parents?.includes(old.id)) : [];
+  if (kids.length) return { p: kids.sort((a, b) => score(b) - score(a))[0], why: 'herdeiro direto' };
+  const spouse = old && adults.find(p => p.id === old.partner);
+  if (spouse) return { p: spouse, why: 'cônjuge' };
+  return null;
+}
+export function ensureLeader(s, offline) {
+  const d = s.dynasty; if (!d || !s.people.length) return;
+  const cur = leaderOf(s);
+  if (cur && cur.age < 66) return;
+  if (cur) cur.leader = false;
+  const adults = s.people.filter(p => p.age >= 14 && !p.away);
+  if (!adults.length) return;
+  const oldId = d.leaderId;
+  const old = cur || { id: oldId, partner: null };
+  const day = timeInfo(s).day;
+  if (!d.leaderId) { setLeader(s, [...adults].sort((a, b) => Math.max(0, ...Object.values(b.skill || {})) - Math.max(0, ...Object.values(a.skill || {})))[0], 'fundador'); return; }
+  const heir = bestHeir(s, old);
+  if (heir) { setLeader(s, heir.p, heir.why); return; }
+  if (s.people.length >= 12 && d.wait == null && !offline) { d.wait = day; (s._newEvents ||= []).push({ id: 'succession', params: {} }); chron(s, 'O trono ficou sem herdeiro direto: há uma disputa pela sucessão.', 'bad'); return; }
+  if (d.wait == null || offline || day - d.wait >= 3) setLeader(s, [...adults].sort((a, b) => Math.max(0, ...Object.values(b.skill || {})) - Math.max(0, ...Object.values(a.skill || {})))[0], 'o mais capaz');
 }
 
 /** Entrega um evento: resolvido pelo conselho (offline ou piloto automático) ou apresentado ao jogador. */
@@ -478,7 +533,7 @@ function populationDaily(s, th, offline) {
     if (p.f && p.preg && day >= p.preg.due) {
       const f = Math.random() < 0.5;
       const child = makePerson(s, { f, age: 0, x: p.x, y: p.y, name: randName(f) });
-      child.job = 'livre'; child.age = 0;
+      child.job = 'livre'; child.age = 0; child.parents = [p.id, p.partner];
       s.people.push(child); p.preg = null; p.lastBirth = day; s.stats.births++;
       chron(s, `${child.name} nasceu, filho(a) de ${p.name}.`, 'birth');
       toast(s, `Nasceu ${child.name}!`, 'good', '👶');

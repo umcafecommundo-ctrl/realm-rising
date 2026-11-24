@@ -228,6 +228,7 @@ function run(s, p, t, dt, th) {
         const take = Math.min(rate * dt, n.amt, cap - cur.amt);
         n.amt -= take; cur.amt += take; gainSkill(p, t.job, dt);
         rt.anim = n.type === 'tree' ? 'chop' : n.type === 'rock' ? 'mine' : 'pick';
+        if (n.type !== 'bush' && (rt.sfxT = (rt.sfxT || 0) - dt) <= 0) { rt.sfxT = 0.8 + Math.random() * 0.4; bus.emit('sfx', { k: n.type === 'tree' ? 'chop' : 'mine', x: p.x, y: p.y, v: 0.8 }); }
         n.hit = (n.hit || 0) + dt; n.lastHit = s.t;
         if (n.type === 'tree' && n.amt <= 0.01) { n.st = 'falling'; n.fallT = 0; n.fallDir = p.x < n.x * TILE ? 1 : -1; n.t = s.t; bus.emit('treefall', n); }
         if (cur.amt >= cap - 0.01 || n.amt <= 0.01) t.ph = 'back';
@@ -291,6 +292,7 @@ function run(s, p, t, dt, th) {
         break;
       }
       rt.anim = 'hammer'; rt.face = center(b).x > p.x ? 1 : -1;
+      if ((rt.sfxT = (rt.sfxT || 0) - dt) <= 0) { rt.sfxT = 0.9 + Math.random() * 0.4; bus.emit('sfx', { k: 'hammer', x: p.x, y: p.y, v: 0.8 }); }
       const def = BUILDINGS[b.type];
       const speed = (1 + techFx(s, 'build')) * personMult(s, p, 'construtor') * t.mult * (s._workMult || 1);
       b.wk += dt * speed; b.prog = Math.min(1, b.wk / def.work); b._lastWork = s.t;

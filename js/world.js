@@ -6,8 +6,8 @@ import { addRes, canAfford, spend, chron, toast, costStr, adultsOf, defensePower
 import { timeInfo, countB } from './state.js';
 import { fairPower } from './war.js';
 
-export const WW = 16, WH = 12;
-export const HOME = { x: 2, y: 6 };
+export const WW = 24, WH = 16;
+export const HOME = { x: 3, y: 8 };
 export const PERS = {
   pacifico: { name: 'Pacífico', icon: '🕊️', desc: 'Prefere a paz e as alianças.' },
   agressivo: { name: 'Agressivo', icon: '🔥', desc: 'Exige tributos e ataca os fracos.' },
@@ -18,6 +18,9 @@ const KDATA = [
   { name: 'Império de Karthos', pers: 'agressivo', color: '#c0392b', ruler: 'General Draven' },
   { name: 'Liga de Mercara', pers: 'comerciante', color: '#e0a82e', ruler: 'Doge Lorenzo' },
   { name: 'Horda de Vargul', pers: 'agressivo', color: '#5a7a2b', ruler: 'Chefe Ghor' },
+  { name: 'Reinado de Solaris', pers: 'pacifico', color: '#f08a3c', ruler: 'Sumo Sacerdote Amon' },
+  { name: 'Clã de Nordhal', pers: 'agressivo', color: '#56b4c4', ruler: 'Jarl Bjorn' },
+  { name: 'Ilhas de Coralis', pers: 'comerciante', color: '#c45ab4', ruler: 'Almirante Perla' },
 ];
 const idx = (x, y) => y * WW + x;
 export const tileAt = (w, x, y) => (x < 0 || y < 0 || x >= WW || y >= WH) ? null : w.tiles[idx(x, y)];
@@ -53,7 +56,7 @@ export function initWorld(s) {
   KDATA.forEach((kd, i) => {
     const c = chosen[i];
     const k = { id: i + 1, ...kd, cap: { x: c.x, y: c.y }, rel: kd.pers === 'agressivo' ? -10 : kd.pers === 'pacifico' ? 15 : 5, known: false, str: rng.int(10, 18) + (kd.pers === 'agressivo' ? 6 : 0), wealth: rng.int(30, 90),
-      treaty: { peace: false, alliance: false, trade: false }, war: false, vassal: false, defeated: false, lastTribute: -99, contact: false, nextAct: 3 + i * 2 };
+      treaty: { peace: false, alliance: false, trade: false }, war: false, vassal: false, defeated: false, lastTribute: -99, contact: false, nextAct: 3 + i * 2, faith: ['sol', 'natureza', 'guerra', 'saber'][rng.int(0, 3)] };
     c.owner = k.id; c.t = c.t === 'sea' ? 'plains' : c.t; c.cap = true;
     // expande território
     let frontier = [c], owned = [c]; const want = rng.int(3, 5);
@@ -69,13 +72,16 @@ export function initWorld(s) {
   // pontos de interesse neutros
   const free = w.tiles.filter(t => t.t !== 'sea' && t.owner == null && Math.hypot(t.x - HOME.x, t.y - HOME.y) > 2.2);
   const kinds = [['camp', 'Acampamento de bandidos', { gold: 3 }], ['camp', 'Fortim de bandoleiros', { gold: 4, food: 3 }], ['iron', 'Depósito de ferro', { iron: 5 }], ['iron', 'Colinas ferrosas', { iron: 6 }],
-    ['fertile', 'Vale fértil', { food: 9 }], ['fertile', 'Várzea rica', { food: 8, water: 4 }], ['lumber', 'Floresta antiga', { wood: 10 }], ['quarry', 'Pedreira abandonada', { stone: 9 }], ['ruins', 'Ruínas antigas', {}], ['ruins', 'Templo esquecido', {}], ['gold', 'Veio de ouro', { gold: 5 }]];
+    ['fertile', 'Vale fértil', { food: 9 }], ['fertile', 'Várzea rica', { food: 8, water: 4 }], ['lumber', 'Floresta antiga', { wood: 10 }], ['quarry', 'Pedreira abandonada', { stone: 9 }], ['ruins', 'Ruínas antigas', {}], ['ruins', 'Templo esquecido', {}], ['gold', 'Veio de ouro', { gold: 5 }], ['camp', 'Fortaleza bárbara', { gold: 6, iron: 3 }], ['iron', 'Mina profunda', { iron: 8 }], ['fertile', 'Planalto verde', { food: 10 }], ['ruins', 'Cidade perdida', {}], ['gold', 'Rio dourado', { gold: 7 }], ['quarry', 'Pedreira de mármore', { stone: 12 }]];
   for (const [type, name, yld] of kinds) {
     const cand = free.filter(t => !t.poi); if (!cand.length) break;
     const t = cand[rng.int(0, cand.length - 1)];
     const d = Math.hypot(t.x - HOME.x, t.y - HOME.y);
     t.poi = { type, name, yield: yld, power: type === 'ruins' ? 0 : Math.round(8 + d * 4 + rng.int(0, 8)), looted: false };
   }
+  // ilhas no mar (só alcançáveis com porto): tesouros e pérolas
+  const seas = w.tiles.filter(t => t.t === 'sea' && !t.poi && Math.min(t.x, t.y, WW - 1 - t.x, WH - 1 - t.y) >= 2 && Math.hypot(t.x - HOME.x, t.y - HOME.y) > 4);
+  for (const nm of ['Ilha do Tesouro', 'Atol de Pérolas', 'Ilha Esquecida', 'Recife dos Piratas']) { if (!seas.length) break; const t = seas.splice(rng.int(0, seas.length - 1), 1)[0]; t.poi = { type: 'island', name: nm, yield: {}, power: 0, looted: false }; }
   // revela o entorno inicial
   reveal(w, HOME.x, HOME.y, 2);
   s.world = w;
@@ -98,8 +104,9 @@ export function canScout(s, x, y) {
   const w = s.world; if (!w) return 'Mapa indisponível';
   const t = tileAt(w, x, y); if (!t) return 'Fora do mapa';
   if (t.rev) return 'Já explorado';
-  if (t.t === 'sea') return 'Mar: precisa de porto (em breve)';
-  if (!w.tiles.some(n => n.rev && n.t !== 'sea' && dist(n, t) <= 2)) return 'Longe demais — explore mais perto primeiro';
+  const sailing = t.t === 'sea';
+  if (sailing && !(countB(s, 'port') && s.tech.done.navigation)) return 'Mar: precisa de Porto e Navegação';
+  if (!w.tiles.some(n => n.rev && (sailing ? true : n.t !== 'sea') && dist(n, t) <= 2)) return 'Longe demais — explore mais perto primeiro';
   if (s.res.food < 8) return 'Precisa de 8 de comida';
   if (w.scouts.length >= 3) return 'Máximo de 3 batedores';
   if (!adultsOf(s).some(p => !p.away && p.job !== 'soldado')) return 'Sem morador disponível';
@@ -142,7 +149,7 @@ export function worldSlow(s, offline) {
       let msg = `${sc.name} explorou ${t.t === 'plains' ? 'planícies' : t.t === 'forest' ? 'florestas' : t.t === 'hills' ? 'colinas' : 'montanhas'}`;
       const poi = fresh.find(n => n.poi);
       if (poi) msg += ` e encontrou: ${poi.poi.name}`;
-      for (const n of fresh) if (n.poi?.type === 'ruins' && !n.poi.looted) { n.poi.looted = true; const loot = pick([{ gold: 40 }, { jewels: 2, gold: 20 }, { iron: 15 }, { cloth: 15 }]); for (const r2 in loot) addRes(s, r2, loot[r2]); msg += ` (saque nas ruínas: ${costStr(loot)})`; }
+      for (const n of fresh) if ((n.poi?.type === 'ruins' || n.poi?.type === 'island') && !n.poi.looted) { n.poi.looted = true; const loot = pick([{ gold: 40 }, { jewels: 2, gold: 20 }, { iron: 15 }, { cloth: 15 }]); for (const r2 in loot) addRes(s, r2, loot[r2]); msg += ` (saque nas ruínas: ${costStr(loot)})`; }
       if (chance(0.08)) { sc.lost = true; msg += '. Mas foi emboscado e não voltou...'; }
       chron(s, msg + '.', 'world');
       if (!offline) toast(s, `Batedor revelou nova região`, 'good', '🧭');
@@ -185,6 +192,7 @@ export function worldDaily(s, offline) {
     if (k.treaty.alliance) k.rel = Math.min(100, k.rel + 0.3);
     if (k.treaty.trade) k.rel = Math.min(100, k.rel + 0.2);
     if (k.war) k.rel = Math.max(-100, k.rel - 0.5);
+    if (s.faith?.id) { if (k.faith === s.faith.id) k.rel = Math.min(100, k.rel + 0.15); else if (k.pers === 'agressivo') k.rel = Math.max(-100, k.rel - 0.05); }
     if (k.vassal) continue;
     // contato espontâneo (eles encontram você)
     if (!k.known && s.era >= 3 && chance(0.03)) { firstContact(s, k, offline); queueEvent(s, k.pers === 'agressivo' ? 'k_tribute' : 'k_envoy', k.pers === 'agressivo' ? tributeParams(s, k) : { k: k.id }); continue; }
@@ -217,7 +225,7 @@ export function worldDaily(s, offline) {
         spend(s, { [r.give.res]: r.give.amt }, { ledger: true });
         const k = kingdomById(s, r.k);
         const dur = travelDays(k.cap.x, k.cap.y) * DAY_LEN * 0.8;
-        w.caravans.push({ id: w.nextId++, route: r.id, k: r.k, sent: s.t, at: s.t + dur, get: { [r.get.res]: Math.round(r.get.amt * (1 + (s.tech.done.commerce ? 0.15 : 0) + (s.tech.done.navigation ? 0.15 : 0))) } });
+        w.caravans.push({ id: w.nextId++, route: r.id, k: r.k, sent: s.t, at: s.t + dur, get: { [r.get.res]: Math.round(r.get.amt * (1 + (s.tech.done.commerce ? 0.15 : 0) + (s.tech.done.navigation ? 0.15 : 0) + (countB(s, 'port') ? 0.4 : 0))), ship: !!countB(s, 'port') } });
         r.fails = 0;
       } else if (++r.fails >= 3) { r.active = false; chron(s, 'Uma rota comercial foi suspensa por falta de mercadoria.', 'bad'); const k = kingdomById(s, r.k); if (k) { k.treaty.trade = false; changeRel(s, k, -8); } }
     }
@@ -325,4 +333,14 @@ export function autoWorld(s) {
     if (acts.includes('alliance') && k.rel >= 50) doDiplo(s, k, 'alliance');
     if (acts.includes('trade') && k.rel >= 5 && !(s._newEvents || []).some(e => e.id === 'k_trade') && day % 3 === 0) doDiplo(s, k, 'trade');
   }
+}
+
+/** Saves antigos têm mapa menor: reconstrói o mapa-múndi preservando os territórios conquistados. */
+export function fixWorldSize(s) {
+  if (!s.world || s.world.tiles.length === WW * WH) return;
+  for (const p of s.people) if (p.away > 0) p.away = 0;
+  const known = s.world.kingdoms.filter(k => k.known).map(k => k.name);
+  initWorld(s);
+  for (const k of s.world.kingdoms) if (known.includes(k.name)) k.known = true;
+  for (const tr of s.territories) { const tl = tileAt(s.world, tr.x, tr.y); if (tl) { tl.owner = 'player'; tl.rev = true; } }
 }

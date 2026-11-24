@@ -572,6 +572,7 @@ export class Renderer {
     if (p.sick > 0) { ctx.fillStyle = 'rgba(120,200,90,0.5)'; ctx.beginPath(); ctx.arc(0, hy, 4.5, 0, 7); ctx.fill(); }
     ctx.restore();
     if (p.preg) { /* sem marcador */ }
+    if (p.leader && !child) { ctx.font = '11px serif'; ctx.fillText('👑', p.x - 6, p.y - 36 * sc - 2); }
     // balões de estado
     if (p.n.hunger < 22 || p.sick > 0) { ctx.font = '10px serif'; ctx.fillText(p.sick > 0 ? '🤒' : '🍖', p.x - 5, p.y - 32 * sc - Math.sin(T * 4) * 1.2); }
     if (!child && p.n.joy < 20) { ctx.font = '10px serif'; ctx.fillText('😠', p.x - 5, p.y - 33 * sc); }
