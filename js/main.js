@@ -1,7 +1,7 @@
 // main.js — inicialização, laço principal, autosave e progresso offline
 
 import { newGame as mkGame, load, save, wipeSave, timeInfo, serialize, migrate } from './state.js';
-import { tick, ensureRuntime } from './sim.js';
+import { tick, ensureRuntime, legacyGain } from './sim.js';
 import { simulateOffline } from './offline.js';
 import { Renderer } from './render.js';
 import { UI } from './ui.js';
@@ -13,6 +13,14 @@ import { reorganizeAll } from './planner.js';
 const game = {
   s: null, r: null, ui: null, tut: null, booting: true,
   saveNow() { if (this.s) save(this.s); },
+  /** Ascensão: reinicia o reino mantendo o Legado acumulado (bônus permanentes). */
+  ascend() {
+    const gain = legacyGain(this.s), total = (this.s.legacy || 0) + gain;
+    wipeSave(); this.s = mkGame(undefined, total); ensureRuntime(this.s);
+    this.ui.reset(); this.r.parts = []; this.r.floats = []; this.r.focus(32 * 32, 26 * 32, 1.4);
+    this.tut.reset(); this.s.tut.done = true; this.saveNow();
+    this.ui.toast(`Novo reino! Legado total: ${total}`, 'gold', '🌟');
+  },
   newGame() {
     wipeSave();
     this.s = mkGame(); ensureRuntime(this.s);

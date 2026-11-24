@@ -199,6 +199,31 @@ export const EVENTS = {
       { label: 'Deixar para depois', hint: 'Perde 8 madeira e 3 pedra; felicidade -3.', fx: s => { pct(s, 'wood', 0.1); pct(s, 'stone', 0.05); for (const p of s.people) p.n.joy -= 3; return 'Goteiras e frio aborrecem o povo.'; } },
     ], auto: s => (s.res.wood >= 25 ? 0 : 1),
   },
+  // ----- Eras avançadas -----
+  comet: {
+    title: 'Cometa no céu', icon: '☄️', era: [3, 6], weight: s => 2, cd: 20,
+    text: s => 'Um cometa brilhante cruza o céu. Uns veem um presságio, outros uma oportunidade de estudo.',
+    options: [
+      { label: 'Estudar o fenômeno', hint: '+60 pontos de pesquisa.', fx: s => { if (s.tech.current) s.tech.progress += 60; else s.tech.rp += 60; return 'Os sábios registram tudo. +60 de pesquisa!'; } },
+      { label: 'Celebrar o presságio', hint: '+8 felicidade.', fx: s => { for (const p of s.people) p.n.joy = Math.min(100, p.n.joy + 8); return 'O povo vê boa sorte no céu e se anima.'; } },
+    ], auto: () => 0,
+  },
+  royal_wedding: {
+    title: 'Casamento real', icon: '💒', era: [4, 6], weight: s => (s.people.length >= 30 ? 3 : 0), cd: 25,
+    text: s => 'Nobres de reinos vizinhos pedem para casar suas famílias com as do seu reino, trazendo dotes generosos.',
+    options: [
+      { label: 'Aceitar as bodas', hint: '+120 ouro e +10 felicidade.', fx: s => { addRes(s, 'gold', 120); for (const p of s.people) p.n.joy = Math.min(100, p.n.joy + 10); return 'Banquetes, música e um bom dote: +120 ouro.'; } },
+      { label: 'Recusar com educação', hint: 'Sem efeito.', fx: s => 'Os nobres partem sem ressentimentos.' },
+    ], auto: () => 0,
+  },
+  great_plague: {
+    title: 'A Grande Peste', icon: '☠️', era: [4, 6], weight: s => (s.people.length >= 40 ? 2 : 0), cd: 40,
+    text: s => 'Uma peste terrível chega com os mercadores. Cidades inteiras estão em perigo.',
+    options: [
+      { label: 'Quarentena total', hint: 'Custa 40 comida e 30 água. Poucos adoecem.', need: { food: 40, water: 30 }, fx: s => { spend(s, { food: 40, water: 30 }); for (const p of s.people) if (chance(0.08)) p.sick = 4; return 'Portões fechados e hospitais de campanha: a peste é contida.'; } },
+      { label: 'Orar e esperar', hint: 'Muitos adoecem; risco de mortes.', fx: s => { for (const p of s.people) if (chance(0.4)) p.sick = 5; const n = killSome(s, Math.max(1, Math.floor(s.people.length * 0.04)), 'sucumbiu à Grande Peste'); return `A peste cobra seu preço: ${n.length} morte(s) e muitos doentes.`; } },
+    ], auto: s => (s.res.food >= 80 && s.res.water >= 50 ? 0 : 1),
+  },
   // ----- Diplomacia (geradas por world.js) -----
   k_tribute: {
     title: 'Exigência de tributo', icon: '📜', era: [3, 5], weight: () => 0, cd: 0,

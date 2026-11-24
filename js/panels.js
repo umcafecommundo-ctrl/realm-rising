@@ -4,7 +4,7 @@ import { BUILDINGS, BUILD_CATS, RES, JOBS, JOB_ORDER, TECHS, ERAS, POLICIES, FES
 import { iconURL } from './art.js';
 import { buildingSprite } from './art_b.js';
 import { unlocked, hasTech, jobUnlocked, countB, timeInfo } from './state.js';
-import { jobCounts, techAvailable, festivalReady, reputation } from './sim.js';
+import { jobCounts, techAvailable, festivalReady, reputation, repCost, techDef } from './sim.js';
 import { avgJoy, foodDays, dailyConsumption, defensePower, capOf } from './core.js';
 import { ACHIEVEMENTS } from './quests.js';
 import { fmt, fmt1 } from './util.js';
@@ -126,7 +126,8 @@ export function policyPanel(s, ui) {
 
 // ---------- Tecnologia ----------
 export function techPanel(s, ui) {
-  const cw = 138, ch = 74, W = 3 * cw + 8, H = 9 * ch + 8;
+  const maxRow = Math.max(...Object.values(TECHS).map(x => x.pos[0]));
+  const cw = 138, ch = 74, W = 3 * cw + 8, H = (maxRow + 1) * ch + 8 + (s.era >= 4 ? 84 : 0);
   // árvore vertical: cada "linha" avança no tempo/era; cabe na largura do painel
   const pos = id => ({ x: TECHS[id].pos[1] * cw + 4, y: TECHS[id].pos[0] * ch + 4 });
   let svg = `<svg class="techsvg" width="${W}" height="${H}">`;
@@ -140,7 +141,8 @@ export function techPanel(s, ui) {
     const sub = done ? '✔ pesquisado' : cur ? `${Math.floor(s.tech.progress)}/${t.cost} RP` : s.era < t.era ? `Era ${ERAS[t.era].name}` : `${t.cost} RP`;
     nodes += `<button class="tnode ${cls}" style="left:${p.x}px;top:${p.y}px" data-act="${av ? 'tech:' + id : 'techinfo:' + id}" data-tip="<b>${t.name}</b><br>${t.desc}">${t.name}<small>${sub}</small></button>`;
   }
-  const cur = s.tech.current ? TECHS[s.tech.current] : null;
+  if (s.era >= 4) { const cost = repCost(s), isCur = s.tech.current === 'rep'; nodes += `<button class="tnode ${isCur ? 'cur' : 'avail'}" style="left:4px;top:${(maxRow + 1) * ch + 8}px;width:${3 * cw - 14}px" data-act="tech:rep" data-tip="<b>Aperfeiçoamento Contínuo</b><br>Pesquisa infinita: +3% coleta/colheita/pesquisa e +2% obra por nível.">♾️ Aperfeiçoamento Contínuo — nível ${s.tech.rep || 0}<small>${isCur ? Math.floor(s.tech.progress) + '/' + cost + ' RP' : cost + ' RP · sem limite'}</small></button>`; }
+  const cur = s.tech.current ? techDef(s, s.tech.current) : null;
   const rpd = (s._rpPerDay || 0);
   const head = `<div class="row"><span style="font-size:24px">🔬</span><div class="grow"><div class="nm">${cur ? 'Pesquisando: ' + cur.name : 'Nenhuma pesquisa ativa'}</div>
     <div class="sub">${cur ? cur.desc : `Pontos guardados: ${Math.floor(s.tech.rp)} RP — escolha uma tecnologia dourada.`}</div>

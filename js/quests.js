@@ -58,15 +58,28 @@ export const QUESTS = [
   { id: 'q_era5', era: 4, text: 'Evolua para o Império', prog: era(5), reward: { gold: 300, jewels: 5 } },
   { id: 'q_mon', era: 5, text: 'Construa um Monumento', prog: bld('monument', 1), reward: { gold: 200 } },
   { id: 'q_terr4', era: 5, text: 'Conquiste 4 territórios', prog: stat(s => s.territories.length, 4), reward: { jewels: 10 } },
+  { id: 'q_tier2', era: 3, text: 'Evolua 3 construções (casa de pedra, fazenda irrigada...)', prog: stat(s => s.buildings.filter(b => BUILDINGS[b.type].tier >= 2 && b.done).length, 3), reward: { planks: 40, gold: 40 } },
+  { id: 'q_manor', era: 4, text: 'Construa uma Mansão', prog: bld('manor', 1), reward: { gold: 120 } },
+  { id: 'q_rep3', era: 4, text: 'Chegue ao Aperfeiçoamento Contínuo 3', prog: stat(s => s.tech.rep || 0, 3), reward: { jewels: 3 } },
   { id: 'q_wonder', era: 5, text: 'Construa a Grande Maravilha', prog: bld('wonder', 1), reward: { gold: 1000, jewels: 20 } },
+  { id: 'q_lib', era: 5, text: 'Construa a Grande Biblioteca', prog: bld('library', 1), reward: { gold: 300, jewels: 5 } },
+  { id: 'q_colossus', era: 5, text: 'Construa o Colosso', prog: bld('colossus', 1), reward: { gold: 300, jewels: 5 } },
+  { id: 'q_gardens', era: 5, text: 'Construa os Jardins Suspensos', prog: bld('gardens', 1), reward: { gold: 300, jewels: 5 } },
+  { id: 'q_pop120', era: 5, text: 'Chegue a 120 moradores', prog: pop(120), reward: { jewels: 10 } },
+  { id: 'q_era6', era: 5, text: 'Alcance a Era Dourada', prog: era(6), reward: { gold: 1000, jewels: 20 } },
+  { id: 'q_obs', era: 6, text: 'Construa o Observatório', prog: bld('observatory', 1), reward: { gold: 500 } },
+  { id: 'q_palace', era: 6, text: 'Construa o Palácio Imperial', prog: bld('palace', 1), reward: { jewels: 20 } },
+  { id: 'q_pop200', era: 6, text: 'Chegue a 200 moradores', prog: pop(200), reward: { jewels: 20 } },
+  { id: 'q_terr8', era: 6, text: 'Conquiste 8 territórios', prog: stat(s => s.territories.length, 8), reward: { jewels: 25 } },
+  { id: 'q_rep10', era: 6, text: 'Aperfeiçoamento Contínuo 10', prog: stat(s => s.tech.rep || 0, 10), reward: { jewels: 30 } },
 ];
 
 export function activeQuests(s, n = 3) {
   return QUESTS.filter(q => !s.quests.done[q.id] && q.era <= s.era).slice(0, n).map(q => ({ q, prog: q.prog(s) }));
 }
 export function longGoal(s) {
-  const goals = ['Transformar o acampamento em uma Vila', 'Crescer até se tornar uma Cidade (16 moradores)', 'Erguer um Reino: mercado, ferraria, quartel e taverna', 'Conquistar o império: castelo, catedral e academia', 'Construir a Grande Maravilha'];
-  return goals[Math.min(s.era - 1, 4)];
+  const goals = ['Transformar o acampamento em uma Vila', 'Crescer até se tornar uma Cidade (16 moradores)', 'Erguer um Reino: mercado, ferraria, quartel e taverna', 'Conquistar o império: castelo, catedral e academia', 'Construir a Grande Maravilha e a Grande Biblioteca', 'Era Dourada: conquistar o mundo e ascender ao Legado'];
+  return goals[Math.min(s.era - 1, 5)];
 }
 export function checkQuests(s) {
   for (const q of QUESTS) {
@@ -104,6 +117,13 @@ export const ACHIEVEMENTS = [
   { id: 'a_conquer', name: 'Conquistador', icon: '🚩', desc: 'Conquiste um território.', check: s => s.territories.length >= 1 },
   { id: 'a_ally', name: 'Diplomata', icon: '🕊️', desc: 'Forme uma aliança.', check: s => (s.world?.kingdoms || []).some(k => k.treaty.alliance) },
   { id: 'a_fest', name: 'Boa Companhia', icon: '🎉', desc: 'Promova 3 festivais.', check: s => s.stats.festivals >= 3 },
+  { id: 'a_era6', name: 'Era Dourada', icon: '✨', desc: 'Alcance a Era Dourada.', check: s => s.era >= 6 },
+  { id: 'a_pop200', name: 'Civilização', icon: '🌍', desc: 'Alcance 200 moradores.', check: s => s.people.length >= 200 },
+  { id: 'a_wonders3', name: 'Sete Maravilhas', icon: '🏛️', desc: 'Construa 3 maravilhas.', check: s => ['wonder', 'library', 'colossus', 'gardens'].filter(t => countB(s, t) >= 1).length >= 3 },
+  { id: 'a_manor', name: 'Nobreza', icon: '🏰', desc: 'Construa uma Mansão.', check: s => countB(s, 'manor') >= 1 },
+  { id: 'a_rep5', name: 'Mente Inquieta', icon: '♾️', desc: 'Aperfeiçoamento Contínuo nível 5.', check: s => (s.tech.rep || 0) >= 5 },
+  { id: 'a_tech25', name: 'Enciclopédia', icon: '📘', desc: 'Pesquise 25 tecnologias.', check: s => Object.keys(s.tech.done).length >= 25 },
+  { id: 'a_legacy', name: 'Dinastia', icon: '🌟', desc: 'Ascenda e comece um novo reino com Legado.', check: s => (s.legacy || 0) > 0 },
   { id: 'a_wonder', name: 'Maravilha do Mundo', icon: '🌠', desc: 'Construa a Grande Maravilha.', check: s => countB(s, 'wonder') >= 1 },
 ];
 export function checkAchievements(s) {

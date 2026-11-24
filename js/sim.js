@@ -2,7 +2,7 @@
 // Funciona em modo "ao vivo" (com movimento e tarefas — ai.js) e em modo "offline" (modelo abstrato, mesmas taxas).
 
 import { DAY_LEN, YEAR_DAYS, SEASON_DAYS, TILE, MAP_W, MAP_H, BUILDINGS, RES, RES_ORDER, ERAS, TECHS, JOBS, JOB_ORDER, OUT_RATE, ADULT_AGE, ELDER_AGE, AGE_DAYS_PER_YEAR, OFFLINE_EFF, FESTIVAL, POLICIES, UNITS } from './data.js';
-import { timeInfo, isNight, recalc, bdef, countB, techFx, hasTech, eraRadius, unlocked, jobUnlocked, CENTER, isWater, rebuildBlocked, makePerson } from './state.js';
+import { timeInfo, isNight, recalc, bdef, countB, kindOf, REP_FX, techFx, hasTech, eraRadius, unlocked, jobUnlocked, CENTER, isWater, rebuildBlocked, makePerson } from './state.js';
 import { bus, addRes, spend, canAfford, chron, toast, floatText, adultsOf, dailyConsumption, foodDays, waterDays, avgJoy, killPerson, addPerson, defensePower, globalMult, personMult, gainSkill, soldiersOf, capOf } from './core.js';
 import { updatePerson, updateAnimals, eatNow, autoJob } from './ai.js';
 import { autoBuild, findSlot, tidyOne, eraDeficits } from './planner.js';
@@ -26,7 +26,7 @@ export function refresh(s) {
   s._drops = [];
   for (const b of s.buildings) {
     if (!b.done) continue;
-    if (b.type === 'campfire' || b.type === 'gatherpoint' || b.type === 'storehouse' || b.type === 'castle' || b.type === 'port')
+    if (['campfire', 'gatherpoint', 'storehouse', 'castle', 'port'].includes(kindOf(b)))
       s._drops.push({ x: (b.x + b.w / 2) * TILE, y: (b.y + b.h) * TILE + 10 });
   }
   assignWorkplaces(s);
@@ -199,18 +199,19 @@ function produce(s, dt, th, offline) {
   for (const b of s.buildings) {
     if (!b.done || !b.enabled) continue;
     const sm = staffMult(b) * gm;
-    switch (b.type) {
-      case 'farm': { const n = staffTot(b); if (n) { addRes(s, 'food', n * 18 * sm * farmSeason * (1 + techFx(s, 'farm')) * k); } break; }
-      case 'well': addRes(s, 'water', (14 + staffN(b, 'coletor') * 8 * sm) * k * (s.weather.type === 'rain' ? 1.2 : 1) * (s.t < (s.flags.droughtUntil || 0) ? 0.4 : 1)); break;
-      case 'sawmill': { const n = staffTot(b); if (n && s.res.wood >= 16 && capOf(s, 'planks') > s.res.planks) { const make = Math.min(n * (s.flags.noSaw ? 8 : 12) * sm * k, (s.res.wood - 12) / 2); addRes(s, 'wood', -make * 2, { noStat: true }); addRes(s, 'planks', make); } break; }
+    const def = BUILDINGS[b.type], bm = def.mult || 1;
+    switch (kindOf(b)) {
+      case 'farm': { const n = staffTot(b); if (n) { addRes(s, 'food', n * 18 * bm * sm * farmSeason * (1 + techFx(s, 'farm')) * k); } break; }
+      case 'well': addRes(s, 'water', ((def.water || 14) + staffN(b, 'coletor') * 8 * sm) * k * (s.weather.type === 'rain' ? 1.2 : 1) * (s.t < (s.flags.droughtUntil || 0) ? 0.4 : 1)); break;
+      case 'sawmill': { const n = staffTot(b); if (n && s.res.wood >= 16 && capOf(s, 'planks') > s.res.planks) { const make = Math.min(n * (s.flags.noSaw ? 8 : 12) * bm * sm * k, (s.res.wood - 12) / 2); addRes(s, 'wood', -make * 2, { noStat: true }); addRes(s, 'planks', make); } break; }
       case 'mine': { const n = staffTot(b); if (n) { if (s.flags.ore) { addRes(s, 'iron', n * 5 * sm * k); addRes(s, 'stone', n * 4 * sm * k); } else addRes(s, 'stone', n * 9 * sm * k); } break; }
       case 'smithy': {
         const n = staffTot(b); if (!n) break;
-        if (b.mode === 'tools') { const make = Math.min(n * 4 * sm * k, s.res.iron, s.res.wood / 2); if (make > 0) { addRes(s, 'iron', -make, { noStat: true }); addRes(s, 'wood', -make * 2, { noStat: true }); addRes(s, 'tools', make); } }
-        else { const make = Math.min(n * 2 * sm * k, s.res.iron / 2, s.res.planks); if (make > 0) { addRes(s, 'iron', -make * 2, { noStat: true }); addRes(s, 'planks', -make, { noStat: true }); addRes(s, 'weapons', make); } }
+        if (b.mode === 'tools') { const make = Math.min(n * 4 * bm * sm * k, s.res.iron, s.res.wood / 2); if (make > 0) { addRes(s, 'iron', -make, { noStat: true }); addRes(s, 'wood', -make * 2, { noStat: true }); addRes(s, 'tools', make); } }
+        else { const make = Math.min(n * 2 * bm * sm * k, s.res.iron / 2, s.res.planks); if (make > 0) { addRes(s, 'iron', -make * 2, { noStat: true }); addRes(s, 'planks', -make, { noStat: true }); addRes(s, 'weapons', make); } }
         break; }
       case 'loom': { const n = staffTot(b); if (n && s.res.food > s.people.length * SEASON_DAYS * 1.3) { const make = Math.min(n * 6 * sm * k, s.res.food); if (make > 0) { addRes(s, 'food', -make, { noStat: true }); addRes(s, 'cloth', make); } } break; }
-      case 'market': addRes(s, 'gold', staffTot(b) * 5 * sm * k * (1 + techFx(s, 'trade'))); break;
+      case 'market': addRes(s, 'gold', staffTot(b) * 5 * bm * sm * k * (1 + techFx(s, 'trade'))); break;
       case 'tavern': { if (s.res.food >= 1 || staffTot(b) === 0) { addRes(s, 'food', -2 * k, { noStat: true }); b._open = true; } else b._open = false; addRes(s, 'gold', staffTot(b) * 3 * sm * k * (b._open ? 1 : 0)); break; }
       case 'port': addRes(s, 'food', (6 + staffN(b, 'coletor') * 10 * sm) * k); addRes(s, 'gold', staffN(b, 'comerciante') * 6 * sm * k * (1 + techFx(s, 'trade'))); break;
       case 'academy': rp += staffTot(b) * 3 * sm * k; break;
@@ -247,7 +248,7 @@ export function pickTech(s) {
   };
   for (const id of targets) { const c = chain(id); if (c) return c; }
   const av = Object.keys(TECHS).filter(id => techAvailable(s, id)).sort((a, b) => TECHS[a].cost - TECHS[b].cost);
-  return av[0] || null;
+  return av[0] || (s.era >= 4 ? 'rep' : null);
 }
 function researchStep(s, dt) {
   if (!s.tech.current && s.policies.autoResearch) { const id = pickTech(s); if (id) startResearch(s, id); }
@@ -255,12 +256,14 @@ function researchStep(s, dt) {
   s._rpPerDay = rp / (dt / DAY_LEN || 1);
   if (s.tech.current) {
     s.tech.progress += rp;
-    const t = TECHS[s.tech.current];
+    const t = techDef(s, s.tech.current);
     if (s.tech.progress >= t.cost) finishTech(s);
   } else s.tech.rp += rp;
 }
 function finishTech(s) {
-  const id = s.tech.current, t = TECHS[id];
+  const id = s.tech.current;
+  if (id === 'rep') { s.tech.rep = (s.tech.rep || 0) + 1; s.tech.current = null; s.tech.progress = 0; chron(s, `Aperfeiçoamento Contínuo: nível ${s.tech.rep}.`, 'tech'); toast(s, `Aperfeiçoamento nível ${s.tech.rep}`, 'good', '🔬'); s._dirty = true; return; }
+  const t = TECHS[id];
   s.tech.done[id] = true; s.tech.current = null; s.tech.progress = 0;
   if (t.unlock?.includes('world')) { s.flags.worldUnlocked = true; if (!s.world) initWorld(s); }
   chron(s, `Descoberta: ${t.name}. ${t.desc}`, 'tech');
@@ -268,7 +271,10 @@ function finishTech(s) {
   bus.emit('tech', id);
   s._dirty = true;
 }
+export const repCost = s => Math.round(300 * Math.pow(1.3, s.tech.rep || 0));
+export function techDef(s, id) { return id === 'rep' ? { name: `Aperfeiçoamento Contínuo ${((s.tech.rep || 0) + 1)}`, cost: repCost(s), desc: '+3% de coleta, colheita e pesquisa; +2% de obra (cumulativo).', era: 4, req: [] } : TECHS[id]; }
 export function startResearch(s, id) {
+  if (id === 'rep') { if (s.era < 4) return false; s.tech.current = 'rep'; s.tech.progress = Math.min(repCost(s) - 0.01, s.tech.rp); s.tech.rp = 0; return true; }
   const t = TECHS[id];
   if (!t || s.tech.done[id] || s.era < t.era || !t.req.every(r => s.tech.done[r])) return false;
   s.tech.current = id;
@@ -723,6 +729,14 @@ export function startFestival(s) {
   return true;
 }
 
+// ---------- Legado (ascensão) ----------
+export const WONDER_TYPES = ['wonder', 'library', 'colossus', 'gardens'];
+export const wondersBuilt = s => WONDER_TYPES.filter(w => s.buildings.some(b => b.type === w && b.done)).length;
+export const canAscend = s => s.era >= 5 && wondersBuilt(s) >= 1;
+export function legacyGain(s) {
+  return Math.max(1, Math.floor((s.era - 1) * 4 + s.people.length / 12 + s.territories.length * 2 + wondersBuilt(s) * 8 + Object.keys(s.achievements).length / 3 + (s.tech.rep || 0) * 0.5));
+}
+
 /** Distribuição automática: os moradores "livres" (e os já auto-atribuídos) são todos empregados.
  *  1º cobre necessidades reais (comida, água, obras, vagas de prédios); 2º reparte o resto de forma preventiva,
  *  dando mais gente ao recurso mais "magro" para evitar a próxima necessidade. Escolhas manuais não são mexidas. */
@@ -828,7 +842,7 @@ export function advanceEra(s) {
   spend(s, st.next.cost);
   s.era++;
   if (s._offlineMode) (s._offEras ||= []).push(s.era);
-  chron(s, `Marco histórico: o povoado agora é ${['', '', 'uma Vila', 'uma Cidade', 'um Reino', 'um Império'][s.era]}!`, 'era');
+  chron(s, `Marco histórico: o povoado agora é ${['', '', 'uma Vila', 'uma Cidade', 'um Reino', 'um Império', 'uma Era Dourada'][s.era]}!`, 'era');
   if (!s._offlineMode) bus.emit('era', s.era);
   s._dirty = true;
   return true;

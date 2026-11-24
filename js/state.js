@@ -89,11 +89,11 @@ export function makePerson(s, o = {}) {
 }
 
 // ---------- Novo jogo ----------
-export function newGame(seed = (Math.random() * 1e9) | 0) {
+export function newGame(seed = (Math.random() * 1e9) | 0, legacy = 0) {
   const terrain = genTerrain(seed);
   const { nodes, nextId } = genNodes(seed, terrain);
   const s = {
-    v: 1, seed, created: Date.now(), lastSaved: Date.now(),
+    v: 1, seed, created: Date.now(), lastSaved: Date.now(), legacy,
     t: DAY_LEN * 0.3, era: 1, speed: 1, paused: false,
     res: { wood: 6, stone: 0, food: 18, water: 14, planks: 0, tools: 0, cloth: 0, iron: 0, gold: 0, weapons: 0, jewels: 0 },
     nodes, nextNid: nextId, nextPid: 1, nextBid: 1,
@@ -116,6 +116,11 @@ export function newGame(seed = (Math.random() * 1e9) | 0) {
   s.people.push(man, wom);
   addBuilding(s, 'campfire', CENTER.x - 1, CENTER.y - 1, true);
   s.chronicle.push({ day: 0, text: 'Tomás e Joana chegam a uma clareira no meio da floresta. Uma fogueira é acesa: nasce o acampamento.', kind: 'era' });
+  if (legacy > 0) { // bônus de Legado: recursos iniciais e primeiras tecnologias já conhecidas
+    for (const r of ['wood', 'stone', 'food', 'water']) s.res[r] += Math.min(40, legacy * 3);
+    ['stone_tools', 'basketry', 'hunting', 'agriculture', 'smoking', 'masonry'].slice(0, Math.floor(legacy / 3)).forEach(id => { s.tech.done[id] = true; });
+    s.chronicle.push({ day: 0, text: `Legado de reinos anteriores (${legacy} pontos) abençoa o novo começo.`, kind: 'era' });
+  }
   recalc(s);
   return s;
 }
@@ -139,14 +144,28 @@ export const isNight = h => h >= 20.5 || h < 5.5;
 
 // ---------- Consultas ----------
 export const bdef = b => BUILDINGS[b.type];
-export const countB = (s, type, doneOnly = true) => s.buildings.reduce((n, b) => n + (b.type === type && (!doneOnly || b.done) ? 1 : 0), 0);
+/** Tipo "base" de uma construção (evoluções contam como o prédio original: casa de pedra é uma casa). */
+export const kindOf = b => BUILDINGS[b.type].as || b.type;
+export const countB = (s, type, doneOnly = true) => s.buildings.reduce((n, b) => n + ((b.type === type || BUILDINGS[b.type].as === type) && (!doneOnly || b.done) ? 1 : 0), 0);
+export const countExact = (s, type, doneOnly = true) => s.buildings.reduce((n, b) => n + (b.type === type && (!doneOnly || b.done) ? 1 : 0), 0);
 export const adults = s => s.people.filter(p => p.age >= 10 && !p.away);
 export const popCount = s => s.people.length;
 export const hasTech = (s, id) => !!s.tech.done[id];
+// Bônus por nível das pesquisas repetíveis e do Legado (ascensão)
+export const REP_FX = { gather: 0.03, farm: 0.03, build: 0.02, rp: 0.03 };
+export const LEG_FX = { gather: 0.04, farm: 0.04, build: 0.04, rp: 0.05, trade: 0.03 };
+function computeFx(s) {
+  const fx = {};
+  const add = (o, k = 1) => { if (o) for (const key in o) fx[key] = (fx[key] || 0) + o[key] * k; };
+  for (const id in s.tech.done) add(TECHS[id]?.fx);
+  for (const b of s.buildings) if (b.done) add(BUILDINGS[b.type].fx);
+  add(REP_FX, s.tech.rep || 0); add(LEG_FX, s.legacy || 0);
+  return fx;
+}
+/** Soma de bônus (tecnologias, maravilhas, pesquisas repetíveis e Legado). Em cache até a próxima recalc(). */
 export function techFx(s, key) {
-  let v = 0;
-  for (const id in s.tech.done) { const f = TECHS[id]?.fx[key]; if (f) v += f; }
-  return v;
+  const fx = s._fx || (s._fx = computeFx(s));
+  return fx[key] || 0;
 }
 export function unlocked(s, what) {
   // construção liberada? (era + tecnologia)
@@ -187,6 +206,7 @@ export function recalc(s) {
     if (r === 'gold') d.cap[r] = Math.max(d.cap[r], 150);
   }
   s._d = d;
+  s._fx = computeFx(s);
   rebuildBlocked(s);
   s._dirty = false;
   return d;
@@ -246,6 +266,7 @@ export function migrate(s) {
   for (const k of ['policies', 'stats', 'flags', 'festival', 'tech', 'quests', 'ev', 'weather']) s[k] = { ...d[k], ...(s[k] || {}) };
   for (const k of ['achievements', 'rates']) s[k] = s[k] || {};
   for (const k of ['threats', 'territories', 'chronicle', 'roads', 'toastQueue']) s[k] = s[k] || [];
+  s.legacy = s.legacy || 0; s.tech.rep = s.tech.rep || 0;
   s.army = s.army || { units: {}, queue: [] };
   s.pendingReports = s.pendingReports || [];
   s.tut = s.tut || { step: 0, done: true };

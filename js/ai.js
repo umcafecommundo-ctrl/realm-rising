@@ -4,7 +4,7 @@
 import { TILE, DAY_LEN, ADULT_AGE, OUT_RATE, CARRY, BUILDINGS, MAP_W, MAP_H, UNITS } from './data.js';
 import { findPath } from './path.js';
 import { addRes, floatText, personMult, globalMult, gainSkill, foodDays, waterDays, bus } from './core.js';
-import { CENTER, isWater, eraRadius, techFx, isNight } from './state.js';
+import { CENTER, isWater, eraRadius, techFx, isNight, kindOf } from './state.js';
 import { rnd, pick, clamp, dist } from './util.js';
 
 const SPEED = 38;
@@ -150,7 +150,7 @@ function think(s, p, th) {
       if (!winter) { const n = findNode(s, p, 'bush'); if (n) { n.rsv = (n.rsv || 0) + 1; return { k: 'gather', node: n, res: 'food', job: 'cacador', mult: 0.6, ph: 'go' }; } }
       break; }
     case 'agricultor': {
-      const farm = s.buildings.find(b => b.type === 'farm' && b.done);
+      const farm = s.buildings.find(b => kindOf(b) === 'farm' && b.done);
       if (farm) return { k: 'work', b: farm, ph: 'go', t: 0 };
       break; }
     case 'soldado': return { k: 'drill', ph: 'go', t: 0 };
@@ -303,16 +303,16 @@ function run(s, p, t, dt, th) {
       if (t.ph === 'go') {
         if (!t.pathSet) {
           let pt = front(b, p.id);
-          if (b.type === 'farm') pt = { x: (b.x + 0.5 + Math.random() * (b.w - 1)) * TILE, y: (b.y + 0.5 + Math.random() * (b.h - 1)) * TILE };
+          if (kindOf(b) === 'farm') pt = { x: (b.x + 0.5 + Math.random() * (b.w - 1)) * TILE, y: (b.y + 0.5 + Math.random() * (b.h - 1)) * TILE };
           goTo(s, p, pt.x, pt.y); t.pathSet = true;
         }
         if (follow(s, p, dt, th)) { t.ph = 'work'; t.t = rnd(14, 26); }
         break;
       }
       rt.working = b.id; rt.face = center(b).x > p.x ? 1 : -1;
-      rt.anim = b.type === 'farm' ? 'hoe' : b.type === 'sawmill' ? 'saw' : b.type === 'smithy' ? 'hammer' : b.type === 'mine' ? 'mine' : b.type === 'jeweler' ? 'hammer' : 'craft';
+      { const kk = kindOf(b); rt.anim = kk === 'farm' ? 'hoe' : kk === 'sawmill' ? 'saw' : kk === 'smithy' ? 'hammer' : kk === 'mine' ? 'mine' : kk === 'jeweler' ? 'hammer' : 'craft'; }
       gainSkill(p, p.job, dt);
-      t.t -= dt; if (t.t <= 0 && b.type === 'farm') { t.done = true; }
+      t.t -= dt; if (t.t <= 0 && kindOf(b) === 'farm') { t.done = true; }
       break; }
     case 'drill': {
       const bk = s.buildings.find(b => b.type === 'barracks' && b.done);

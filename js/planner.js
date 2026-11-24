@@ -2,17 +2,17 @@
 // Regras de economia: só gasta o excedente (mantém reservas), no máximo 2 obras abertas, e nunca constrói com fome/sede crítica.
 
 import { BUILDINGS, SEASON_DAYS, ERAS } from './data.js';
-import { CENTER, unlocked, countB, eraRadius } from './state.js';
+import { CENTER, unlocked, countB, eraRadius, kindOf } from './state.js';
 import { footprintOk, placeBuilding, eraStatus, upgradeInfo, upgradeBuilding, moveBuilding } from './sim.js';
 import { chron, foodDays, waterDays, avgJoy, capOf, adultsOf } from './core.js';
 
 // Distritos: ângulo central (graus, 0 = leste, 90 = sul), abertura, faixa de raio (em tiles) e tipos
 export const ZONES = {
-  res: { name: 'Bairro residencial', ang: 180, spread: 55, rmin: 5, rmax: 15, types: ['shelter', 'house'] },
-  civic: { name: 'Centro cívico', ang: 90, spread: 60, rmin: 4, rmax: 11, types: ['market', 'tavern', 'storehouse', 'gatherpoint', 'well', 'loom'] },
-  ind: { name: 'Distrito industrial', ang: 0, spread: 55, rmin: 6, rmax: 15, types: ['sawmill', 'smithy', 'mine', 'jeweler'] },
-  farm: { name: 'Zona agrícola', ang: -90, spread: 60, rmin: 7, rmax: 18, types: ['farm'] },
-  grand: { name: 'Distrito real', ang: -135, spread: 45, rmin: 8, rmax: 18, types: ['castle', 'cathedral', 'academy', 'monument', 'wonder'] },
+  res: { name: 'Bairro residencial', ang: 180, spread: 55, rmin: 5, rmax: 15, types: ['shelter', 'house', 'stonehouse', 'manor'] },
+  civic: { name: 'Centro cívico', ang: 90, spread: 60, rmin: 4, rmax: 11, types: ['market', 'tavern', 'storehouse', 'gatherpoint', 'well', 'loom', 'warehouse', 'cistern', 'bazaar', 'inn'] },
+  ind: { name: 'Distrito industrial', ang: 0, spread: 55, rmin: 6, rmax: 15, types: ['sawmill', 'smithy', 'mine', 'jeweler', 'sawmill2', 'foundry'] },
+  farm: { name: 'Zona agrícola', ang: -90, spread: 60, rmin: 7, rmax: 18, types: ['farm', 'irrfarm'] },
+  grand: { name: 'Distrito real', ang: -135, spread: 45, rmin: 8, rmax: 18, types: ['castle', 'cathedral', 'academy', 'monument', 'wonder', 'library', 'colossus', 'gardens', 'observatory', 'palace'] },
   mil: { name: 'Distrito militar', ang: 45, spread: 40, rmin: 9, rmax: 17, types: ['barracks'] },
   port: { name: 'Orla', ang: -34, spread: 70, rmin: 6, rmax: 24, types: ['port'] },
 };
@@ -92,7 +92,7 @@ function autoBuildOnce(s) {
   if (open >= 3) return null;
   const pop = s.people.length, d = s._d; if (!d || pop < 2) return null;
   const fd = foodDays(s), wd = waterDays(s);
-  const have = t => s.buildings.filter(b => b.type === t).length;
+  const have = t => s.buildings.filter(b => kindOf(b) === t).length;
   const pending = t => s.buildings.some(b => b.type === t && !b.done);
   const rate = r => s.rates[r] || 0;
   const era = s.era;
@@ -103,6 +103,10 @@ function autoBuildOnce(s) {
     for (const b of s.buildings) {
       if (!b.done || !BUILDINGS[b.type].upgrade) continue;
       const info = upgradeInfo(s, b); if (!info || !info.ok) continue;
+      const bd = BUILDINGS[b.type];
+      if (bd.beds && d.beds - bd.beds < pop) continue;                 // não deixa o povo sem cama durante a obra
+      if ((fd < 5 || wd < 3) && (bd.slots || bd.storage)) continue;    // em crise de comida/água não mexe em produção
+      if (BUILDINGS[info.to].unique && s.buildings.some(x => x.type === info.to)) continue;
       if (info.to === 'storehouse' && !(have('storehouse') < 1 || capOf(s, 'food') < pop * SEASON_DAYS * 1.1)) continue;
       if (!affordSafely(s, info.cost, 0.8, d.beds < pop + 2 ? 0.4 : 1)) continue;
       if (upgradeBuilding(s, b)) { (s._autoBuilt ||= []).push(`${BUILDINGS[info.to].name} (evolução)`); return b; }
@@ -161,6 +165,8 @@ function autoBuildOnce(s) {
     L.push(['jeweler', !saving && pop >= 55 && !have('jeweler'), false]);
     L.push(['port', !saving && pop >= 50 && !have('port'), false]);
   }
+  if (era >= 5) { L.push(['colossus', !saving && pop >= 70 && !have('colossus'), false]); L.push(['gardens', !saving && pop >= 70 && !s.buildings.some(b => b.type === 'gardens'), false]); }
+  if (era >= 6) { L.push(['observatory', pop >= 90 && !s.buildings.some(b => b.type === 'observatory'), false]); L.push(['palace', pop >= 100 && !s.buildings.some(b => b.type === 'palace'), false]); }
   for (const [type, cond, relaxed] of L) {
     if (!cond || !unlocked(s, type) || pending(type)) continue;
     const def = BUILDINGS[type];

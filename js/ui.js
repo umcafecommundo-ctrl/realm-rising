@@ -3,7 +3,7 @@
 import { RES, RES_ORDER, BUILDINGS, JOBS, ERAS, SEASONS, SEASON_ICON, TILE, POLICIES, DAY_LEN, TECHS, ADULT_AGE, UNITS } from './data.js';
 import { timeInfo, jobUnlocked, unlocked, countB, hasTech, serialize, bdef } from './state.js';
 import { bus, capOf, avgJoy, foodDays, costStr, canAfford } from './core.js';
-import { canPlace, placeBuilding, moveCheck, moveBuilding, upgradeInfo, upgradeBuilding, adjustJob, setPolicy, startResearch, startFestival, eraStatus, advanceEra, getAlerts, demolish, setJob, jobCounts } from './sim.js';
+import { canAscend, legacyGain, wondersBuilt, canPlace, placeBuilding, moveCheck, moveBuilding, upgradeInfo, upgradeBuilding, adjustJob, setPolicy, startResearch, startFestival, eraStatus, advanceEra, getAlerts, demolish, setJob, jobCounts } from './sim.js';
 import { eventView, chooseOption } from './events.js';
 import { activeQuests, longGoal, QUESTS } from './quests.js';
 import { iconURL } from './art.js';
@@ -248,7 +248,7 @@ export class UI {
       case 'job+': if (!adjustJob(s, b, 1)) this.toast('Sem moradores disponíveis para essa vaga.', 'bad', '🙂'); break;
       case 'job-': adjustJob(s, b, -1); break;
       case 'pol': { const p = POLICIES[b]; setPolicy(s, b, p.bool ? c === '1' : +c); break; }
-      case 'tech': { const sc = document.querySelector('.techwrap'); this._techScroll = sc ? sc.scrollLeft : 0; if (startResearch(s, b)) this.toast(`Pesquisando: ${TECHS[b].name}`, 'good', '🔬'); break; }
+      case 'tech': { const sc = document.querySelector('.techwrap'); this._techScroll = sc ? sc.scrollLeft : 0; if (startResearch(s, b)) this.toast(`Pesquisando: ${b === 'rep' ? 'Aperfeiçoamento Contínuo' : TECHS[b].name}`, 'good', '🔬'); break; }
       case 'techinfo': { const t = TECHS[b]; this.toast(`${t.name}: ${t.desc}${s.era < t.era ? ` (disponível na era ${ERAS[t.era].name})` : ''}`, 'info', '🔬'); return; }
       case 'sel': { this.select({ kind: b, id: +c }, true); if (window.innerWidth <= 760) this.closePanel(); return; }
       case 'festival': if (!startFestival(s)) this.toast('Festival indisponível agora.', 'bad', '🎉'); break;
@@ -476,7 +476,7 @@ export class UI {
     const def = ERAS[era]; const s = this.s;
     const newB = Object.entries(BUILDINGS).filter(([id, d]) => d.era === era);
     const newJ = Object.entries(JOBS).filter(([id, j]) => j.era === era && id !== 'livre');
-    const html = `<div class="modal era-modal"><div class="big" style="font-size:60px">${['', '🏕️', '🏘️', '🏙️', '👑', '🌟'][era]}</div>
+    const html = `<div class="modal era-modal"><div class="big" style="font-size:60px">${['', '🏕️', '🏘️', '🏙️', '👑', '🌟', '✨'][era]}</div>
       <p style="margin:0;color:#e8d4a0;letter-spacing:.2em;font-size:12px">NOVA ERA</p><h1>${def.name}</h1><p>${def.desc || def.unlocks}</p>
       <div class="unl"><b>Liberado:</b><br>${def.unlocks || ''}</div>
       <div class="statgrid">${newB.slice(0, 8).map(([id, d]) => `<div class="stat" style="text-align:center"><div style="font-size:22px">${d.icon}</div><small>${d.name}</small></div>`).join('')}</div>
@@ -508,6 +508,7 @@ export class UI {
       <button class="opt" data-m="save"><b>💾 Salvar agora</b><small>O jogo também salva automaticamente a cada 10 segundos.</small></button>
       <button class="opt" data-m="export"><b>📤 Exportar save</b><small>Copia seu progresso para a área de transferência.</small></button>
       <button class="opt" data-m="import"><b>📥 Importar save</b><small>Cole um save exportado anteriormente.</small></button>
+      ${canAscend(this.s) ? `<button class="opt" data-m="ascend"><b style="color:#f2c14e">🌟 Ascender (Legado +${legacyGain(this.s)})</b><small>Reinicia o reino mantendo bônus permanentes (+4% coleta, colheita e obra por ponto, recursos e pesquisas iniciais).</small></button>` : ''}
       <button class="opt" data-m="tut"><b>🎓 Rever tutorial</b><small>Reinicia as dicas guiadas.</small></button>
       <button class="opt" data-m="help"><b>❓ Como jogar</b><small>Controles e dicas rápidas.</small></button>
       <button class="opt" data-m="new"><b style="color:#ff9b8a">🗑️ Novo jogo</b><small>Apaga o progresso atual.</small></button>
@@ -519,6 +520,7 @@ export class UI {
       else if (m === 'save') { g.saveNow(); this.toast('Jogo salvo!', 'good', '💾'); }
       else if (m === 'export') { const t = serialize(this.s); navigator.clipboard?.writeText(t).then(() => this.toast('Save copiado!', 'good', '📤'), () => this.promptText('Copie o save:', t)); }
       else if (m === 'import') { this.closeModal(); const t = prompt('Cole aqui o save exportado:'); if (t) { try { g.importSave(t); this.toast('Save importado!', 'good', '📥'); } catch (err) { this.toast('Save inválido.', 'bad', '⚠️'); } } }
+      else if (m === 'ascend') { if (confirm(`Ascender agora? Seu reino atual será encerrado e você ganha +${legacyGain(this.s)} de Legado (total ${(this.s.legacy || 0) + legacyGain(this.s)}).`)) { this.closeModal(); g.ascend(); } }
       else if (m === 'tut') { this.closeModal(); g.restartTutorial(); }
       else if (m === 'help') { this.closeModal(); this.showHowTo(); }
       else if (m === 'new') { if (confirm('Apagar todo o progresso e começar de novo?')) { this.closeModal(); g.newGame(); } }

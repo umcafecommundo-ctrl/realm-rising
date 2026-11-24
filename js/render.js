@@ -1,7 +1,7 @@
 // render.js — câmera, desenho do mundo (terreno, entidades, partículas), iluminação dia/noite, clima e entrada (arrastar/zoom/pinça)
 
 import { TILE, MAP_W, MAP_H, BUILDINGS, JOBS, DAY_LEN, SEASONS, ADULT_AGE } from './data.js';
-import { timeInfo, isNight, CENTER, eraRadius, isWater, recalc } from './state.js';
+import { timeInfo, isNight, CENTER, eraRadius, isWater, recalc, kindOf } from './state.js';
 import { terrainTiles, treeSprite, stumpSprite, saplingSprite, rockSprite, bushSprite, iconURL, PAL, SC, TREE_BOX, rg } from './art.js';
 import { buildingSprite, scaffoldSprite, foundationSprite } from './art_b.js';
 import { bus } from './core.js';
@@ -458,14 +458,14 @@ export class Renderer {
     // luzes e fumaça
     for (const L of sp.lights) this.lights.push({ x: bx - sp.ox + L.x, y: by - sp.oy + L.y, r: L.r || (L.win ? 38 : 40), c: L.c, fire: !!L.fire, win: !!L.win });
     if (sp.smoke) {
-      const active = (b.type === 'house' ? (night > 0.2 || th.season === 3 || th.hour < 9 || s.weather.type === 'rain') : b.type === 'tavern' ? (b._open !== false) : (b._sc > 0 || b.type === 'smithy' && b._sc > 0));
+      const active = (kindOf(b) === 'house' ? (night > 0.2 || th.season === 3 || th.hour < 9 || s.weather.type === 'rain') : kindOf(b) === 'tavern' ? (b._open !== false) : (b._sc > 0 || kindOf(b) === 'smithy' && b._sc > 0));
       if (active) { const key = b.id; this.emit[key] = (this.emit[key] || 0) + dt; if (this.emit[key] > 0.35) { this.emit[key] = 0; this.parts.push({ type: 'smoke', x: bx - sp.ox + sp.smoke.x, y: by - sp.oy + sp.smoke.y, vx: rnd(2, 8), vy: rnd(-16, -10), life: 0, max: rnd(2.2, 3.4), sz: rnd(3, 5) }); } }
     }
-    if (b.type === 'smithy' && b._sc > 0 && Math.random() < dt * 6) this.parts.push({ type: 'spark', x: bx + 22, y: by - 18, vx: rnd(-20, 20), vy: rnd(-50, -20), life: 0, max: 0.7, col: '#ffb040', sz: 1.5, grav: 80 });
-    if (b.type === 'sawmill' && b._sc > 0 && Math.random() < dt * 8) this.parts.push({ type: 'chip', x: bx + 30, y: by - 14, vx: rnd(-26, 26), vy: rnd(-40, -10), life: 0, max: 0.6, col: '#e6c58a', sz: 1.6 });
+    if (kindOf(b) === 'smithy' && b._sc > 0 && Math.random() < dt * 6) this.parts.push({ type: 'spark', x: bx + 22, y: by - 18, vx: rnd(-20, 20), vy: rnd(-50, -20), life: 0, max: 0.7, col: '#ffb040', sz: 1.5, grav: 80 });
+    if (kindOf(b) === 'sawmill' && b._sc > 0 && Math.random() < dt * 8) this.parts.push({ type: 'chip', x: bx + 30, y: by - 14, vx: rnd(-26, 26), vy: rnd(-40, -10), life: 0, max: 0.6, col: '#e6c58a', sz: 1.6 });
     // tochas à noite nas construções grandes
     if (def.light >= 80 && b.type !== 'campfire') this.drawTorch(ctx, bx - 6, by - 2, T, night); if (def.light >= 80 && b.type !== 'campfire') this.drawTorch(ctx, bx + b.w * TILE + 6, by - 2, T, night);
-    if (b.type === 'farm' && th.season === 2 && Math.random() < dt * 0.6) this.parts.push({ type: 'leaf', x: bx + rnd(0, b.w * TILE), y: by - b.h * TILE, vx: rnd(-6, 6), vy: rnd(8, 16), life: 0, max: 2, col: '#e0b13a', sz: 2, rot: 0 });
+    if (kindOf(b) === 'farm' && th.season === 2 && Math.random() < dt * 0.6) this.parts.push({ type: 'leaf', x: bx + rnd(0, b.w * TILE), y: by - b.h * TILE, vx: rnd(-6, 6), vy: rnd(8, 16), life: 0, max: 2, col: '#e0b13a', sz: 2, rot: 0 });
     if (b.enabled === false) { ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(bx, by - b.h * TILE, b.w * TILE, b.h * TILE); }
   }
   drawTorch(ctx, x, y, T, night) {
