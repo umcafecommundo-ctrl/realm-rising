@@ -49,7 +49,7 @@ export function buildPanel(s, ui) {
   const cats = BUILD_CATS.filter(c => Object.values(BUILDINGS).some(d => d.cat === c && d.era <= s.era + 1));
   const cat = cats.includes(ui.buildCat) ? ui.buildCat : cats[0];
   ui.buildCat = cat;
-  let h = `<div class="pills">${cats.map(c => `<button class="pill ${c === cat ? 'on' : ''}" data-act="cat:${c}">${c}</button>`).join('')}</div><div class="grid">`;
+  let h = `<button class="btn" data-act="organize" style="width:100%;margin-bottom:8px" data-tip="Move construções fora do lugar para seus distritos (custa 25% do valor das já prontas)">📐 Organizar reino agora</button><div class="pills">${cats.map(c => `<button class="pill ${c === cat ? 'on' : ''}" data-act="cat:${c}">${c}</button>`).join('')}</div><div class="grid">`;
   for (const [id, d] of Object.entries(BUILDINGS)) {
     if (d.cat !== cat || id === 'campfire' || d.era > s.era + 1) continue;
     let lock = '';

@@ -279,3 +279,20 @@ export function fairPower(s, cap, kind = 'army') {
   for (let i = 0; i < 12; i++) { const mid = (lo + hi) / 2; const r = simulateBattle(composeEnemy(mid, kind, s.era), D, { dHp: hp }); if (r.win) hi = mid; else lo = mid; }
   return lo;
 }
+
+/** Conquista automática: ataca alvos claramente mais fracos (acampamentos neutros e reinos já em guerra). */
+export function autoConquer(s) {
+  const w = s.world; if (!w || s.era < 3 || !countB(s, 'barracks') || w.marches.length) return;
+  const sol = soldiersOf(s); if (sol.length < 6) return;
+  const A = unitCounts(s);
+  let best = null;
+  for (const t of w.tiles) {
+    const ai = attackInfo(s, t.x, t.y); if (!ai) continue;
+    if (ai.kingdom && !ai.kingdom.war) continue;           // só ataca reinos com os quais já há guerra
+    const D = composeEnemy(ai.power, ai.kingdom ? 'army' : 'bandits', Math.max(3, s.era));
+    const r = simulateBattle(A, D, { dHp: ai.cap ? 1.5 : 1.1 });
+    const r2 = simulateBattle({ ...A }, composeEnemy(ai.power * 1.3, ai.kingdom ? 'army' : 'bandits', Math.max(3, s.era)), { dHp: ai.cap ? 1.5 : 1.1 });
+    if (r.win && r2.win && (!best || ai.power > best.p)) best = { x: t.x, y: t.y, p: ai.power };   // o mais valioso que ainda vence com folga
+  }
+  if (best) launchAttack(s, best.x, best.y, 0.8);
+}

@@ -306,7 +306,7 @@ function run(s, p, t, dt, th) {
           if (b.type === 'farm') pt = { x: (b.x + 0.5 + Math.random() * (b.w - 1)) * TILE, y: (b.y + 0.5 + Math.random() * (b.h - 1)) * TILE };
           goTo(s, p, pt.x, pt.y); t.pathSet = true;
         }
-        if (follow(s, p, dt, th)) { t.ph = 'work'; t.t = rnd(3, 6); }
+        if (follow(s, p, dt, th)) { t.ph = 'work'; t.t = rnd(14, 26); }
         break;
       }
       rt.working = b.id; rt.face = center(b).x > p.x ? 1 : -1;

@@ -5,10 +5,10 @@ import { DAY_LEN, YEAR_DAYS, SEASON_DAYS, TILE, MAP_W, MAP_H, BUILDINGS, RES, RE
 import { timeInfo, isNight, recalc, bdef, countB, techFx, hasTech, eraRadius, unlocked, jobUnlocked, CENTER, isWater, rebuildBlocked, makePerson } from './state.js';
 import { bus, addRes, spend, canAfford, chron, toast, floatText, adultsOf, dailyConsumption, foodDays, waterDays, avgJoy, killPerson, addPerson, defensePower, globalMult, personMult, gainSkill, soldiersOf, capOf } from './core.js';
 import { updatePerson, updateAnimals, eatNow, autoJob } from './ai.js';
-import { autoBuild } from './planner.js';
+import { autoBuild, findSlot, tidyOne } from './planner.js';
 import { rollEvent, resolveAuto, makeInstance } from './events.js';
-import { worldDaily, worldSlow, initWorld } from './world.js';
-import { warDaily, resolveThreat, trainTick, marchTick, autoMilitary } from './war.js';
+import { worldDaily, worldSlow, initWorld, autoWorld } from './world.js';
+import { warDaily, resolveThreat, trainTick, marchTick, autoMilitary, autoConquer } from './war.js';
 import { checkQuests, checkAchievements } from './quests.js';
 import { clamp, rnd, rint, chance, pick, hash2, randName } from './util.js';
 
@@ -89,6 +89,7 @@ function slowTick(s, dt, th, offline) {
     s._flowT = 0;
   }
   s._autoT = (s._autoT || 0) + dt; if (s._autoT >= (offline ? 10 : 6)) { s._autoT = 0; autoAssign(s, offline ? 6 : 2); }
+  if (!offline && s.policies.autoEvents && s.ev.pending.length) for (const inst of [...s.ev.pending]) { const r = resolveAuto(s, inst); if (r !== null) { const l = (s._offLog || []).pop(); if (l) toast(s, `Conselho — ${l.title}: ${l.choice}`, 'info', l.icon); } }
   worldSlow(s, offline); marchTick(s, offline);
   s._toolFactor = s.res.tools > 0.5 ? 1.15 : (countB(s, 'smithy') ? 0.85 : 1);
   if (!offline) { checkQuests(s); checkAchievements(s); }
@@ -191,14 +192,14 @@ const staffMult = b => b._sc ? b._sm / b._sc : 1;
 function produce(s, dt, th, offline) {
   const k = dt / DAY_LEN;
   const gm = globalMult(s) * (s._workMult || 1);
-  const farmSeason = [0.9, 1.25, 1.5, 0.12][th.season] * (s.weather.type === 'rain' ? 1.1 : s.weather.type === 'storm' ? 0.9 : 1);
+  const farmSeason = [0.9, 1.25, 1.5, 0.3][th.season] * (s.weather.type === 'rain' ? 1.1 : s.weather.type === 'storm' ? 0.9 : 1);
   s._produced = s._produced || {};
   let rp = 0;
   for (const b of s.buildings) {
     if (!b.done || !b.enabled) continue;
     const sm = staffMult(b) * gm;
     switch (b.type) {
-      case 'farm': { const n = staffTot(b); if (n) { addRes(s, 'food', n * 12 * sm * farmSeason * (1 + techFx(s, 'farm')) * k); } break; }
+      case 'farm': { const n = staffTot(b); if (n) { addRes(s, 'food', n * 18 * sm * farmSeason * (1 + techFx(s, 'farm')) * k); } break; }
       case 'well': addRes(s, 'water', (14 + staffN(b, 'coletor') * 8 * sm) * k * (s.weather.type === 'rain' ? 1.2 : 1) * (s.t < (s.flags.droughtUntil || 0) ? 0.4 : 1)); break;
       case 'sawmill': { const n = staffTot(b); if (n && s.res.wood >= 16 && capOf(s, 'planks') > s.res.planks) { const make = Math.min(n * 8 * sm * k, (s.res.wood - 12) / 2); addRes(s, 'wood', -make * 2, { noStat: true }); addRes(s, 'planks', make); } break; }
       case 'mine': { const n = staffTot(b); if (n) { if (s.flags.ore) addRes(s, 'iron', n * 5 * sm * k); else addRes(s, 'stone', n * 9 * sm * k); } break; }
@@ -423,24 +424,41 @@ function dailyTick(s, th, offline) {
   s._poolStamp = (s._poolStamp || 0) + 1;
   populationDaily(s, th, offline);
   // ferramentas e pesquisa
-  autoBuild(s); autoMilitary(s);
+  autoBuild(s); tidyOne(s); autoMilitary(s); autoPolicies(s, offline);
+  if (s.policies.autoWorld) { autoWorld(s); autoConquer(s); }
   if (s.policies.autoEra && eraStatus(s)?.ready) advanceEra(s);
   worldDaily(s, offline);
   warDaily(s, offline);
   if (s._newEvents?.length) {
-    for (const e of s._newEvents) { const inst = makeInstance(s, e.id, e.params); if (offline) resolveAuto(s, inst); else { s.ev.pending.push(inst); bus.emit('event', inst); } }
+    for (const e of s._newEvents) { const inst = makeInstance(s, e.id, e.params); deliverEvent(s, inst, offline); }
     s._newEvents = [];
   }
   // eventos aleatórios
   if (s.t >= s.ev.cooldownUntil) {
     const ev = rollEvent(s, offline);
     s.ev.cooldownUntil = s.t + DAY_LEN * rnd(1.8, 3.8);
-    if (ev) { if (offline) resolveAuto(s, ev); else s.ev.pending.push(ev); if (!offline) bus.emit('event', ev); }
+    if (ev) deliverEvent(s, ev, offline);
   }
   // avisos de estação
   if (!offline && th.dOfSeason === 0) { chron(s, `Chegou ${['a primavera', 'o verão', 'o outono', 'o inverno'][th.season]}. Ano ${th.year + 1}.`, 'season'); bus.emit('season', th.season); }
   if (offline && th.dOfSeason === 0) s._offSeasons = (s._offSeasons || 0) + 1;
   s._dirty = true;
+}
+
+/** Entrega um evento: resolvido pelo conselho (offline ou piloto automático) ou apresentado ao jogador. */
+function deliverEvent(s, inst, offline) {
+  if (offline || s.policies.autoEvents) {
+    const res = resolveAuto(s, inst);
+    if (!offline) { const l = (s._offLog || []).pop(); if (l) toast(s, `Conselho — ${l.title}: ${l.choice}`, 'info', l.icon); }
+  } else { s.ev.pending.push(inst); bus.emit('event', inst); }
+}
+function autoPolicies(s, offline) {
+  if (!s.policies.autoEvents) return;
+  const j = avgJoy(s);
+  if (s.era >= 3) { if (j < 35 && s.policies.tax > 0) setPolicy(s, 'tax', s.policies.tax - 1); else if (j > 72 && s.policies.tax < 1) setPolicy(s, 'tax', 1); }
+  if (j < 55 && s.people.length >= 6 && festivalReady(s) && s.res.food > 120 && s.res.water > 60) startFestival(s);
+  if (s.policies.overtime && j < 45) s.policies.overtime = false;
+  if (s.policies.conscription && s.era < 3) s.policies.conscription = false;
 }
 
 function populationDaily(s, th, offline) {
@@ -597,6 +615,57 @@ export function placeBuilding(s, type, x, y) {
   s._dirty = true;
   bus.emit('placed', b);
   return b;
+}
+/** Informações de evolução de uma construção (abrigo → casa, área de coleta → depósito). */
+export function upgradeInfo(s, b) {
+  const def = BUILDINGS[b.type];
+  if (!def.upgrade || !b.done) return null;
+  const to = def.upgrade.to, td = BUILDINGS[to];
+  const cost = {}; for (const r in td.cost) cost[r] = Math.ceil(td.cost[r] * def.upgrade.frac);
+  let reason = null;
+  if (!unlocked(s, to)) reason = s.era < td.era ? `Libera na era ${ERAS[td.era].name}` : 'Pesquisa necessária';
+  else if (!canAfford(s, cost)) reason = 'Recursos insuficientes';
+  return { to, name: td.name, cost, ok: !reason, reason };
+}
+export function upgradeBuilding(s, b) {
+  const info = upgradeInfo(s, b); if (!info || !info.ok) return false;
+  const td = BUILDINGS[info.to];
+  // cabe no mesmo lugar? senão procura um lugar no distrito
+  let x = b.x, y = b.y;
+  const i = s.buildings.indexOf(b); s.buildings.splice(i, 1);
+  let fits = !footprintOkSized(s, info.to, x, y);
+  s.buildings.splice(i, 0, b);
+  if (!fits) { const slot = findSlot(s, info.to, b); if (!slot) return false; [x, y] = slot; }
+  spend(s, info.cost);
+  for (const n of s.nodes) if (n.type === 'tree') { const nx = Math.floor(n.x), ny = Math.floor(n.y); if (nx >= x && nx < x + td.w && ny >= y && ny < y + td.h) n.st = 'removed'; }
+  s.nodes = s.nodes.filter(n => n.st !== 'removed');
+  const from = BUILDINGS[b.type].name;
+  b.type = info.to; b.w = td.w; b.h = td.h; b.x = x; b.y = y; b.done = false; b.prog = 0; b.wk = 0; b.upgraded = true;
+  chron(s, `${from} está sendo evoluído(a) para ${td.name}.`, 'build');
+  s._dirty = true; bus.emit('placed', b);
+  return true;
+}
+const footprintOkSized = (s, type, x, y) => footprintOk(s, type, x, y);
+/** Verifica se uma construção pode ser movida para (x, y). Mudar prédio pronto custa 25% do valor. */
+export function moveCheck(s, b, x, y) {
+  const def = BUILDINGS[b.type];
+  if (b.type === 'campfire') return { ok: false, reason: 'A fogueira não pode ser movida' };
+  const i = s.buildings.indexOf(b); s.buildings.splice(i, 1);
+  let why; try { why = footprintOk(s, b.type, x, y); } finally { s.buildings.splice(i, 0, b); }
+  if (why) return { ok: false, reason: why };
+  const fee = {}; if (b.done) for (const r in def.cost) fee[r] = Math.ceil(def.cost[r] * 0.25);
+  if (!canAfford(s, fee)) return { ok: false, reason: 'Falta recurso para a mudança', fee };
+  return { ok: true, fee };
+}
+export function moveBuilding(s, b, x, y, free = false, pin = true) {
+  const c = moveCheck(s, b, x, y); if (!c.ok) return false;
+  const def = BUILDINGS[b.type];
+  if (!free) spend(s, c.fee);
+  for (const n of s.nodes) if (n.type === 'tree') { const nx = Math.floor(n.x), ny = Math.floor(n.y); if (nx >= x && nx < x + def.w && ny >= y && ny < y + def.h) n.st = 'removed'; }
+  s.nodes = s.nodes.filter(n => n.st !== 'removed');
+  b.x = x; b.y = y; b.pinned = pin; b.manual = false;
+  s._dirty = true; bus.emit('moved', b);
+  return true;
 }
 export function demolish(s, b) {
   if (b.type === 'campfire') return false;

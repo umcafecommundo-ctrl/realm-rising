@@ -3,7 +3,7 @@
 
 import { BUILDINGS, SEASON_DAYS, ERAS } from './data.js';
 import { CENTER, unlocked, countB, eraRadius } from './state.js';
-import { footprintOk, placeBuilding, eraStatus } from './sim.js';
+import { footprintOk, placeBuilding, eraStatus, upgradeInfo, upgradeBuilding, moveBuilding } from './sim.js';
 import { chron, foodDays, waterDays, avgJoy, capOf, adultsOf } from './core.js';
 
 // Distritos: ângulo central (graus, 0 = leste, 90 = sul), abertura, faixa de raio (em tiles) e tipos
@@ -98,13 +98,23 @@ function autoBuildOnce(s) {
   const era = s.era;
   const storageN = have('storehouse') + have('gatherpoint');
   const full = ['wood', 'stone', 'food', 'water'].some(r => s.res[r] >= capOf(s, r) * 0.92);
+  // evolução de construções antigas (abrigo → casa, área de coleta → depósito) com excedente
+  if (era >= 2 && !s.flags.noUp && !s.buildings.some(b => b.upgraded && !b.done)) {
+    for (const b of s.buildings) {
+      if (!b.done || !BUILDINGS[b.type].upgrade) continue;
+      const info = upgradeInfo(s, b); if (!info || !info.ok) continue;
+      if (info.to === 'storehouse' && !(have('storehouse') < 1 || capOf(s, 'food') < pop * SEASON_DAYS * 1.1)) continue;
+      if (!affordSafely(s, info.cost, 0.8, d.beds < pop + 2 ? 0.4 : 1)) continue;
+      if (upgradeBuilding(s, b)) { (s._autoBuilt ||= []).push(`${BUILDINGS[info.to].name} (evolução)`); return b; }
+    }
+  }
   const st = eraStatus(s);
   const saving = !!st && st.reqOk && !st.costOk;   // só falta juntar recursos: não gasta em extras
   const L = [];   // [tipo, condição, relaxado?]
   if (d.beds < pop - 1 && fd >= 2 && wd >= 1.5) L.push([era >= 2 ? 'house' : 'shelter', true, true]); // gente sem cama: moradia primeiro
   if (wd < 3 && era >= 2) L.push(['well', have('well') < 4, true]);
   if (fd < 4 && era >= 2) L.push(['farm', have('farm') < Math.ceil(pop / 8) + 1, true]);
-  const foodCap = era >= 2 ? have('farm') * 16 + 8 : 12;   // população que a produção de comida sustenta (inclui o inverno)
+  const foodCap = era >= 2 ? have('farm') * 20 + 8 : 12;   // população que a produção de comida sustenta (inclui o inverno)
   const calm = fd >= 6 && wd >= 3 && rate('food') > -4;
   L.push([era >= 2 ? 'house' : 'shelter', calm && d.beds < pop + 2 && pop + 2 <= foodCap * 1.15, true]);
   // o que falta para evoluir de era
@@ -112,7 +122,7 @@ function autoBuildOnce(s) {
   const winterCap = capOf(s, 'food') < pop * SEASON_DAYS * 1.1 && pop >= 8; // estoque de comida não cobre um inverno
   L.push([era >= 2 ? 'storehouse' : 'gatherpoint', (winterCap && storageN < 10) || (!saving && full && storageN < 1 + pop / 14), winterCap]);
   if (era >= 2) {
-    L.push(['farm', (have('farm') < Math.ceil(pop / 8) + (pop >= 16 ? 1 : 0) && (fd < 20 || rate('food') < 0)) || pop + 4 > foodCap, true]);
+    L.push(['farm', (have('farm') < Math.ceil(pop / 7) + (pop >= 16 ? 1 : 0) && (fd < 20 || rate('food') < 0)) || pop + 4 > foodCap, true]);
     L.push(['well', have('well') < Math.max(1, Math.ceil(pop / 20)) && (wd < 14 || rate('water') < 0), true]);
     L.push(['sawmill', !saving && pop >= 10 && !have('sawmill'), false]);
   }
@@ -171,4 +181,38 @@ export function tidyManual(s) {
   }
   if (moved.length) (s._moved ||= []).push(...moved);
   return moved;
+}
+
+/** Reorganiza UM prédio fora do distrito por dia (automático). Prédios que o jogador moveu ("fixados") nunca são mexidos. */
+export function tidyOne(s) {
+  if (!s.policies.autoBuild || s.flags.noTidy) return null;
+  for (const b of s.buildings) {
+    if (b.pinned || ['campfire', 'road', 'wall'].includes(b.type) || !zoneOf(b.type) || inZone(b)) continue;
+    if (b.tidyT && s.t - b.tidyT < 86400) continue;
+    b.tidyT = s.t;
+    const def = BUILDINGS[b.type];
+    let fee = {}; if (b.done) for (const r in def.cost) fee[r] = Math.ceil(def.cost[r] * 0.25);
+    if (b.done && !affordSafely(s, fee, 0.9, 0.5)) continue;
+    const slot = findSlot(s, b.type, b); if (!slot) continue;
+    if (moveBuilding(s, b, slot[0], slot[1], false, false)) {
+      const z = zoneOf(b.type);
+      chron(s, `${def.name} foi reorganizado(a) para o ${z.name.toLowerCase()}.`, 'build');
+      (s._moved ||= []).push(`${def.name} → ${z.name}`);
+      return b;
+    }
+  }
+  return null;
+}
+/** Botão "Organizar reino": move agora todos os prédios fora do lugar (respeitando o orçamento). */
+export function reorganizeAll(s) {
+  let n = 0;
+  for (const b of [...s.buildings]) {
+    if (b.pinned || ['campfire', 'road', 'wall'].includes(b.type) || !zoneOf(b.type) || inZone(b)) continue;
+    const def = BUILDINGS[b.type];
+    const fee = {}; if (b.done) for (const r in def.cost) fee[r] = Math.ceil(def.cost[r] * 0.25);
+    if (b.done && !affordSafely(s, fee, 0.95, 0.3)) continue;
+    const slot = findSlot(s, b.type, b); if (!slot) continue;
+    if (moveBuilding(s, b, slot[0], slot[1], false, false)) { n++; chron(s, `${def.name} foi reorganizado(a) para o ${zoneOf(b.type).name.toLowerCase()}.`, 'build'); }
+  }
+  return n;
 }

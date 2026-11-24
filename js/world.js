@@ -305,3 +305,24 @@ export function launchEnemyArmy(s, k, frac) {
   chron(s, `${k.name} marcha contra nós!`, 'war');
   toast(s, `${k.name} está atacando!`, 'bad', '⚔️');
 }
+
+/** Piloto automático do mundo: explora, cuida da diplomacia e do comércio. */
+export function autoWorld(s) {
+  const w = s.world; if (!w || !s.flags.worldUnlocked) return;
+  // exploração: sempre um batedor ativo enquanto houver mapa a descobrir
+  if (w.scouts.length < 1 && s.res.food >= 40) {
+    let best = null, bd = 1e9;
+    for (const t of w.tiles) { if (t.rev || canScout(s, t.x, t.y)) continue; const d = Math.hypot(t.x - HOME.x, t.y - HOME.y); if (d < bd) { bd = d; best = t; } }
+    if (best) sendScout(s, best.x, best.y);
+  }
+  const day = timeInfo(s).day;
+  for (const k of w.kingdoms) {
+    if (!k.known || k.defeated || k.vassal) continue;
+    const acts = diploActions(s, k).filter(a => a.ok).map(a => a.id);
+    if (k.war) { if (day % 4 === 0 && acts.includes('peace')) doDiplo(s, k, 'peace'); continue; }
+    if (k.rel < 0 && s.res.gold >= 150 && day % 5 === 0 && acts.includes('gift')) doDiplo(s, k, 'gift');
+    if (acts.includes('treaty') && k.rel >= 5) doDiplo(s, k, 'treaty');
+    if (acts.includes('alliance') && k.rel >= 50) doDiplo(s, k, 'alliance');
+    if (acts.includes('trade') && k.rel >= 5 && !(s._newEvents || []).some(e => e.id === 'k_trade') && day % 3 === 0) doDiplo(s, k, 'trade');
+  }
+}

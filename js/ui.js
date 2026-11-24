@@ -3,11 +3,12 @@
 import { RES, RES_ORDER, BUILDINGS, JOBS, ERAS, SEASONS, SEASON_ICON, TILE, POLICIES, DAY_LEN, TECHS, ADULT_AGE, UNITS } from './data.js';
 import { timeInfo, jobUnlocked, unlocked, countB, hasTech, serialize, bdef } from './state.js';
 import { bus, capOf, avgJoy, foodDays, costStr, canAfford } from './core.js';
-import { canPlace, placeBuilding, adjustJob, setPolicy, startResearch, startFestival, eraStatus, advanceEra, getAlerts, demolish, setJob, jobCounts } from './sim.js';
+import { canPlace, placeBuilding, moveCheck, moveBuilding, upgradeInfo, upgradeBuilding, adjustJob, setPolicy, startResearch, startFestival, eraStatus, advanceEra, getAlerts, demolish, setJob, jobCounts } from './sim.js';
 import { eventView, chooseOption } from './events.js';
 import { activeQuests, longGoal, QUESTS } from './quests.js';
 import { iconURL } from './art.js';
 import { buildPanel, peoplePanel, jobsPanel, policyPanel, techPanel, chroniclePanel, achievementsPanel, esc, rimg, costHTML, taskText, needsMini, ageText } from './panels.js';
+import { reorganizeAll } from './planner.js';
 import { WorldUI, battleHTML, runBattle } from './worldui.js';
 import { fmt, fmt1, fmtDur } from './util.js';
 
@@ -252,6 +253,7 @@ export class UI {
       case 'sel': { this.select({ kind: b, id: +c }, true); if (window.innerWidth <= 760) this.closePanel(); return; }
       case 'festival': if (!startFestival(s)) this.toast('Festival indisponível agora.', 'bad', '🎉'); break;
       case 'chr': this.chrFilter = b; break;
+      case 'organize': { const n = reorganizeAll(s); this.toast(n ? `${n} construção(ões) reorganizada(s) em distritos` : 'Tudo já está organizado (ou faltam recursos para mudar)', n ? 'good' : 'info', '📐'); break; }
     }
     this.lastPanelHTML = ''; this.refreshPanel();
   }
@@ -291,6 +293,8 @@ export class UI {
     else if (a === 'follow') { const p = s.people.find(q => q.id === this.sel?.id); this.r.following = this.r.following ? null : p; }
     else if (a === 'toggle') { const bd = s.buildings.find(q => q.id === this.sel?.id); if (bd) { bd.enabled = !bd.enabled; s._dirty = true; } }
     else if (a === 'mode') { const bd = s.buildings.find(q => q.id === this.sel?.id); if (bd) bd.mode = b; }
+    else if (a === 'move') { const bd = s.buildings.find(q => q.id === this.sel?.id); if (bd) { this.startMove(bd); return; } }
+    else if (a === 'upgrade') { const bd = s.buildings.find(q => q.id === this.sel?.id); if (bd) { if (upgradeBuilding(s, bd)) this.toast(`Evoluindo para ${bdef(bd).name}`, 'good', '⬆️'); else this.toast('Não foi possível evoluir agora', 'bad', '🚫'); } }
     else if (a === 'demolish') { const bd = s.buildings.find(q => q.id === this.sel?.id); if (bd && confirm(`Demolir ${bdef(bd).name}? Você recupera parte dos recursos.`)) { demolish(s, bd); this.select(null); } }
     this.updateInspector(true);
   }
@@ -313,6 +317,7 @@ export class UI {
       const b = s.buildings.find(q => q.id === sel.id);
       if (!b) { this.select(null); return; }
       const def = bdef(b);
+      const up = upgradeInfo(s, b);
       const staff = b._st ? Object.values(b._st).reduce((a, v) => a + v, 0) : 0;
       const slots = def.slots ? Object.values(def.slots).reduce((a, v) => a + v, 0) : 0;
       const assigned = s.people.filter(p => p.workplace === b.id).length;
@@ -320,7 +325,7 @@ export class UI {
         <div class="sub" style="font-size:12px;color:#a9b5a3">${def.desc}</div>
         <div style="margin:6px 0;font-size:12.5px">${b.done ? `<span class="tag g">Pronto</span>` : `<span class="tag y">Construindo ${Math.round(b.prog * 100)}%</span>`} ${slots ? `<span class="tag b">Trabalhadores ${assigned}/${slots}</span>` : ''} ${def.beds ? `<span class="tag">🛏 ${def.beds}</span>` : ''} ${def.storage ? `<span class="tag">📦 +${def.storage}</span>` : ''} ${def.defense ? `<span class="tag r">🛡 +${def.defense}</span>` : ''}</div>
         ${b.done && b.type === 'smithy' ? `<div class="seg" style="margin:6px 0"><button class="${b.mode === 'tools' ? 'on' : ''}" data-i="mode:tools">Ferramentas</button><button class="${b.mode === 'weapons' ? 'on' : ''}" data-i="mode:weapons">Armas</button></div>` : ''}
-        <div class="acts" style="display:flex;gap:6px;flex-wrap:wrap">${b.done && def.slots ? `<button class="btn" data-i="toggle">${b.enabled ? '⏸ Desativar' : '▶ Ativar'}</button>` : ''}${b.type !== 'campfire' ? `<button class="btn bad" data-i="demolish">Demolir</button>` : ''}</div>`;
+        <div class="acts" style="display:flex;gap:6px;flex-wrap:wrap">${b.done && def.slots ? `<button class="btn" data-i="toggle">${b.enabled ? '⏸ Desativar' : '▶ Ativar'}</button>` : ''}${up ? `<button class="btn pri ${up.ok ? '' : 'dis'}" data-i="upgrade" data-tip="${up.ok ? 'Evolui mantendo o lugar (refaz a obra)' : up.reason}">⬆ ${up.name}</button>` : ''}${b.type !== 'campfire' ? `<button class="btn" data-i="move">✥ Mover</button>` : ''}${b.type !== 'campfire' ? `<button class="btn bad" data-i="demolish">Demolir</button>` : ''}</div>${up ? `<div class="sub" style="margin-top:4px;font-size:11.5px">Evoluir custa ${Object.entries(up.cost).map(([r, v]) => v + ' ' + RES[r].name.toLowerCase()).join(', ')}</div>` : ''}${b.pinned ? '<div class="sub" style="font-size:11px;color:#a9b5a3">📌 Posição fixada por você: a automação não move.</div>' : ''}`;
     }
     if (force || h !== this._inspH) { this._inspH = h; el.innerHTML = h; }
     el.classList.remove('hidden');
@@ -337,6 +342,15 @@ export class UI {
     this.updateBuildbar(true);
     this.onBuildStart && this.onBuildStart(type);
   }
+  /** Modo mover: leva uma construção existente para outro lugar (fixa o prédio, a automação não mexe mais nele). */
+  startMove(b) {
+    this.select(null); this.closePanel();
+    this.build = { type: b.type, move: b, x: null, y: null };
+    this.r.paintMode = false; $('game').classList.add('building');
+    this.moveGhost({ x: (b.x + b.w / 2) * TILE, y: (b.y + b.h / 2) * TILE });
+    $('buildbar').classList.remove('hidden');
+    this.updateBuildbar(true);
+  }
   cancelBuild() {
     if (!this.build) return;
     this.build = null; this.r.ghost = null; this.r.paintMode = false; $('game').classList.remove('building'); $('buildbar').classList.add('hidden');
@@ -346,7 +360,7 @@ export class UI {
     const def = BUILDINGS[b.type];
     b.x = Math.round(wp.x / TILE - def.w / 2); b.y = Math.round(wp.y / TILE - def.h / 2);
     if (def.w === 1) { b.x = Math.floor(wp.x / TILE); b.y = Math.floor(wp.y / TILE); }
-    const c = canPlace(this.s, b.type, b.x, b.y);
+    const c = b.move ? moveCheck(this.s, b.move, b.x, b.y) : canPlace(this.s, b.type, b.x, b.y);
     b.ok = c.ok; b.reason = c.reason;
     this.r.ghost = { type: b.type, x: b.x, y: b.y, ok: c.ok, reason: c.reason };
   }
@@ -365,6 +379,11 @@ export class UI {
   confirmBuild(keep, quiet) {
     const b = this.build; if (!b || b.x == null) return;
     const def = BUILDINGS[b.type];
+    if (b.move) {
+      if (moveBuilding(this.s, b.move, b.x, b.y)) { this.toast(`${def.name} movido(a)`, 'good', '✥'); this.cancelBuild(); }
+      else this.toast(b.reason || 'Não pode mover para cá', 'bad', '🚫');
+      return;
+    }
     const nb = placeBuilding(this.s, b.type, b.x, b.y);
     if (nb) {
       nb.manual = true;
@@ -382,9 +401,10 @@ export class UI {
     const b = this.build; if (!b) return;
     const def = BUILDINGS[b.type]; const s = this.s;
     const touch = matchMedia('(pointer: coarse)').matches;
-    const c = b.x != null ? canPlace(s, b.type, b.x, b.y) : { ok: false, reason: '' };
-    const h = `<div class="grow"><b>${def.icon} ${def.name}</b><small>${c.ok ? (touch ? 'Toque em outro local para mover, ou confirme.' : 'Clique no mapa para construir (Esc cancela).') : `<span style="color:#ff9b8a">${c.reason || ''}</span>`}</small>${costHTML(def.cost, s)}</div>
-      ${touch || true ? `<button class="btn pri ${c.ok ? '' : 'dis'}" data-b="ok">✔ Construir</button>` : ''}<button class="btn" data-b="x">✖</button>`;
+    const c = b.x != null ? (b.move ? moveCheck(s, b.move, b.x, b.y) : canPlace(s, b.type, b.x, b.y)) : { ok: false, reason: '' };
+    const mv = !!b.move;
+    const h = `<div class="grow"><b>${mv ? '✥ Mover ' : ''}${def.icon} ${def.name}</b><small>${c.ok ? (touch ? 'Toque em outro local para mover, ou confirme.' : mv ? 'Clique no novo local (Esc cancela).' : 'Clique no mapa para construir (Esc cancela).') : `<span style="color:#ff9b8a">${c.reason || ''}</span>`}</small>${mv ? (c.fee && Object.keys(c.fee).length ? 'Custo da mudança: ' + costHTML(c.fee, s) : '<small>Mudança sem custo</small>') : costHTML(def.cost, s)}</div>
+      <button class="btn pri ${c.ok ? '' : 'dis'}" data-b="ok">${mv ? '✔ Mover aqui' : '✔ Construir'}</button><button class="btn" data-b="x">✖</button>`;
     if (force || h !== this._bbH) { this._bbH = h; $('buildbar').innerHTML = h; }
     if (this.r.ghost) { this.r.ghost.ok = c.ok; this.r.ghost.reason = c.reason; }
   }
