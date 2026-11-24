@@ -8,6 +8,7 @@ import { UI } from './ui.js';
 import { Tutorial } from './tutorial.js';
 import { bus } from './core.js';
 import { OFFLINE_MAX } from './data.js';
+import { reorganizeAll } from './planner.js';
 
 const game = {
   s: null, r: null, ui: null, tut: null, booting: true,
@@ -37,6 +38,7 @@ async function boot() {
   if (!s) s = mkGame();
   game.s = s;
   ensureRuntime(s);
+  if (!fresh && s.policies.autoBuild && !s.flags.organized1) { s.flags.organized1 = true; try { const n = reorganizeAll(s); if (n) s.chronicle.push({ day: Math.floor(s.t / 100), text: `${n} construção(ões) foram reorganizadas em distritos.`, kind: 'build' }); } catch (e) { console.error(e); } }
   game.r = new Renderer(canvas);
   const mobile = innerWidth < 760;
   game.r.focus(32 * 32, 26 * 32 + 10, mobile ? 1.15 : 1.5);

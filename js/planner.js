@@ -184,9 +184,11 @@ export function tidyManual(s) {
 }
 
 /** Reorganiza UM prédio fora do distrito por dia (automático). Prédios que o jogador moveu ("fixados") nunca são mexidos. */
-export function tidyOne(s) {
+export function tidyOne(s, max = 3) {
   if (!s.policies.autoBuild || s.flags.noTidy) return null;
+  let moved = 0, last = null;
   for (const b of s.buildings) {
+    if (moved >= max) break;
     if (b.pinned || ['campfire', 'road', 'wall'].includes(b.type) || !zoneOf(b.type) || inZone(b)) continue;
     if (b.tidyT && s.t - b.tidyT < 86400) continue;
     b.tidyT = s.t;
@@ -198,10 +200,10 @@ export function tidyOne(s) {
       const z = zoneOf(b.type);
       chron(s, `${def.name} foi reorganizado(a) para o ${z.name.toLowerCase()}.`, 'build');
       (s._moved ||= []).push(`${def.name} → ${z.name}`);
-      return b;
+      moved++; last = b;
     }
   }
-  return null;
+  return last;
 }
 /** Botão "Organizar reino": move agora todos os prédios fora do lugar (respeitando o orçamento). */
 export function reorganizeAll(s) {
